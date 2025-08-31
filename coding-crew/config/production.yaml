@@ -1,0 +1,47 @@
+environment: production
+
+# LLM Configuration
+llm:
+  provider: ollama
+  base_url: ${OLLAMA_BASE_URL:-http://localhost:11434}
+  timeout: 300
+  max_retries: 3
+  models:
+    analysis: ollama/llama3.1:8b
+    coding: ollama/qwen2.5-coder:1.5b-base
+    review: ollama/llama3.1:8b
+    testing: ollama/llama3.1:8b
+    documentation: ollama/llama3.1:8b
+
+# Web Interface
+web:
+  host: 0.0.0.0
+  port: ${PORT:-8000}
+  cors_origins: []
+  max_request_size: 10485760  # 10MB
+
+# Workflow Configuration
+workflow:
+  max_iterations:
+    development: 5
+    testing: 3
+  timeout_seconds:
+    analysis: 600
+    development: 1200
+    testing: 600
+    documentation: 300
+  coverage_target: 80.0
+
+# Logging
+logging:
+  level: INFO
+  format: json
+  correlation_id: true
+  file_rotation: true
+  max_file_size: 100MB
+
+# Performance
+performance:
+  memory_limit_mb: 2048
+  cache_ttl_seconds: 3600
+  cleanup_interval_seconds: 300

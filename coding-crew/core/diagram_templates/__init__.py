@@ -1,0 +1,1 @@
+"""Draw.io XML diagram templates for aesthetic system architecture diagrams."""

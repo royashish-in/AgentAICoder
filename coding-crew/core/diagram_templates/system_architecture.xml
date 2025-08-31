@@ -1,0 +1,39 @@
+<mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="1">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    
+    <!-- Frontend Layer -->
+    <mxCell id="frontend" value="Frontend Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="80" width="200" height="60" as="geometry"/>
+    </mxCell>
+    
+    <!-- API Gateway -->
+    <mxCell id="api" value="API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="200" width="200" height="60" as="geometry"/>
+    </mxCell>
+    
+    <!-- Business Logic -->
+    <mxCell id="business" value="Business Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="320" width="200" height="60" as="geometry"/>
+    </mxCell>
+    
+    <!-- Database -->
+    <mxCell id="database" value="Database Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="440" width="200" height="60" as="geometry"/>
+    </mxCell>
+    
+    <!-- Connections -->
+    <mxCell id="conn1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="frontend" target="api">
+      <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+    </mxCell>
+    
+    <mxCell id="conn2" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="api" target="business">
+      <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+    </mxCell>
+    
+    <mxCell id="conn3" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="business" target="database">
+      <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

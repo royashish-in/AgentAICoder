@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  app:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./cache:/app/cache
+      - ./metrics:/app/metrics
+      - ./config:/app/config
+    environment:
+      - OLLAMA_HOST=ollama:11434
+      - DATABASE_URL=sqlite:///./coding_crew.db
+      - LOG_LEVEL=INFO
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_ORIGINS=*
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

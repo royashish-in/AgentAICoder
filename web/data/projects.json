@@ -1,0 +1,18 @@
+{
+  "5d3560e7-c9d6-41aa-ad05-582faad2633e": {
+    "id": "5d3560e7-c9d6-41aa-ad05-582faad2633e",
+    "requirement_id": "REQ-20250831-F25FE41A",
+    "workflow_id": "d5b70ec8-2de4-4c5d-bee2-07afc08424b4",
+    "created_at": "2025-08-31T21:39:50.269739",
+    "status": "analyzing",
+    "project_name": "CPy",
+    "description": "Create a Python script that scrapes the titles of the top 5 articles from a given news website (e.g., a simple blog or news site) and prints them to the console",
+    "target_users": "developers",
+    "scale": "small",
+    "features": [
+      "Create a Python script that scrapes the titles of the top 5 articles from a given news website (e.g., a simple blog or news site) and prints them to the console"
+    ],
+    "constraints": "local deployment",
+    "project_path": "/Users/royashish/AI/AgentAI/web/../generated_projects/REQ-20250831-F25FE41A_cpy"
+  }
+}
