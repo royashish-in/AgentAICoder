@@ -8,16 +8,24 @@ class AgentAIInterface {
 
     renderMarkdown(text) {
         if (typeof marked !== 'undefined') {
-            return marked.parse(text);
+            return marked.parse(this.escapeHtml(text));
         }
         // Fallback if marked.js is not loaded
-        return text.replace(/\n/g, '<br>');
+        return this.escapeHtml(text).replace(/\n/g, '<br>');
     }
 
     init() {
         this.loadDashboardStats();
         this.setupEventListeners();
         this.startDashboardRefresh();
+        this.selectedStories = [];
+        this.requirementSource = null;
+        this.allStories = [];
+        this.currentPage = 1;
+        this.pageSize = 10;
+        this.searchTerm = '';
+        // Initialize Lucide icons after DOM updates
+        setTimeout(() => lucide.createIcons(), 100);
     }
 
     startDashboardRefresh() {
@@ -34,6 +42,17 @@ class AgentAIInterface {
         const form = document.getElementById('project-form');
         if (form) {
             form.addEventListener('submit', (e) => this.handleProjectSubmit(e));
+        }
+        
+        // Requirement source switching
+        document.querySelectorAll('input[name="requirement-source"]').forEach(radio => {
+            radio.addEventListener('change', (e) => this.switchRequirementSource(e.target.value));
+        });
+        
+        // Load stories button
+        const loadBtn = document.getElementById('load-stories-btn');
+        if (loadBtn) {
+            loadBtn.addEventListener('click', () => this.loadJiraStories());
         }
         
         const featureInput = document.getElementById('feature-input');
@@ -62,7 +81,6 @@ class AgentAIInterface {
         
         this.currentPage = pageId;
 
-
         // Load page-specific data
         if (pageId === 'dashboard') {
             this.loadDashboardStats();
@@ -72,8 +90,13 @@ class AgentAIInterface {
             this.loadAnalyses();
         } else if (pageId === 'projects') {
             this.loadProjects();
+        } else if (pageId === 'metrics') {
+            this.loadMetrics();
+        } else if (pageId === 'chat') {
+            this.initChat();
         } else if (pageId === 'new-project') {
-            this.setFormDefaults();
+            this.showRequirementModal();
+            return;
         }
     }
 
@@ -157,8 +180,8 @@ class AgentAIInterface {
         // Add + card for requirements column
         if (columnId === 'requirements-column') {
             content += `
-                <div class="kanban-card add-card" onclick="app.showPage('new-project')">
-                    <div class="add-icon">+</div>
+                <div class="kanban-card add-card" onclick="showPage('new-project')">
+                    <i data-lucide="plus" class="add-icon"></i>
                     <div class="add-text">Add New Project</div>
                 </div>
             `;
@@ -188,7 +211,10 @@ class AgentAIInterface {
             </div>
         `).join('');
         
-        container.innerHTML = content;
+        container.innerHTML = this.sanitizeHtml(content);
+        
+        // Re-initialize Lucide icons for new content
+        setTimeout(() => lucide.createIcons(), 50);
     }
 
     async loadWorkflows() {
@@ -202,13 +228,16 @@ class AgentAIInterface {
                     <div class="empty-state">
                         <h3>No active workflows</h3>
                         <p>Start a new project to create your first workflow</p>
-                        <button class="btn btn-primary" onclick="app.showPage('new-project')">Create Project</button>
+                        <button class="btn btn-primary" onclick="showPage('new-project')">
+                            <i data-lucide="plus"></i>
+                            Create Project
+                        </button>
                     </div>
                 `;
                 return;
             }
 
-            container.innerHTML = workflows.map(workflow => `
+            const workflowsHtml = workflows.map(workflow => `
                 <div class="workflow-card">
                     <div class="workflow-header">
                         <div class="workflow-title">${workflow.project_name}</div>
@@ -226,6 +255,11 @@ class AgentAIInterface {
                     </div>
                 </div>
             `).join('');
+            
+            container.innerHTML = this.sanitizeHtml(workflowsHtml);
+            
+            // Re-initialize Lucide icons
+            setTimeout(() => lucide.createIcons(), 50);
         } catch (error) {
             console.error('Failed to load workflows:', error);
         }
@@ -266,6 +300,7 @@ class AgentAIInterface {
             const projectsResponse = await fetch('/api/projects');
             const projects = await projectsResponse.json();
             this.projectsCache = projects.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+            this.analysisCache = analyses.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
             
             const container = document.getElementById('analyses-list');
             if (analyses.length === 0) {
@@ -278,8 +313,8 @@ class AgentAIInterface {
                 return;
             }
 
-            container.innerHTML = analyses.map(analysis => `
-                <div class="analysis-card" data-analysis="${analysis.id}">
+            const analysesHtml = analyses.map(analysis => `
+                <div class="modern-analysis-card" data-analysis="${analysis.id}">
                     <div class="analysis-id">ID: ${this.getRequirementId(analysis.project_id)}</div>
                     <div class="analysis-header">
                         <div class="analysis-title">${analysis.title || 'Analysis Report'}</div>
@@ -302,7 +337,71 @@ class AgentAIInterface {
                         </div>
                     ` : ''}
                     
-                    <div class="analysis-content markdown-content">${this.renderMarkdown(analysis.content)}</div>
+                    <div class="modern-approval-container">
+                        <div class="approval-tabs">
+                            <button class="tab-btn active" onclick="app.switchApprovalTab(event, 'review-${analysis.id}')">📋 Review</button>
+                            <button class="tab-btn" onclick="app.switchApprovalTab(event, 'tests-${analysis.id}')">🧪 Tests</button>
+                            ${analysis.diagrams && analysis.diagrams.length > 0 ? `<button class="tab-btn" onclick="app.switchApprovalTab(event, 'diagrams-${analysis.id}')">📊 Diagrams</button>` : ''}
+                            <button class="tab-btn" onclick="app.switchApprovalTab(event, 'chat-${analysis.id}')">💬 Ask AI</button>
+                            <button class="tab-btn" onclick="app.switchApprovalTab(event, 'decision-${analysis.id}')">✅ Decision</button>
+                        </div>
+                        
+                        <div id="review-${analysis.id}" class="approval-tab-content active">
+                            <div class="clean-analysis-view">
+                                <div class="analysis-summary">
+                                    <div class="markdown-content">${this.renderMarkdown(analysis.content.substring(0, 500) + '...')}</div>
+                                    <button class="btn btn-link" onclick="app.expandAnalysis('${analysis.id}')">Read Full Analysis</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="tests-${analysis.id}" class="approval-tab-content">
+                            <div class="test-plan-section">
+                                <h4>🧪 Test Strategy</h4>
+                                ${analysis.test_plan ? `
+                                    <div class="test-content">
+                                        <div class="markdown-content">${this.renderMarkdown(analysis.test_plan)}</div>
+                                    </div>
+                                ` : '<p class="no-tests">No test plan available for this analysis.</p>'}
+                            </div>
+                        </div>
+                        
+                        <div id="chat-${analysis.id}" class="approval-tab-content">
+                            <div class="architect-chat">
+                                <div class="chat-header">
+                                    <h4>🤖 Ask the AI Architect</h4>
+                                    <p>Get clarifications about this analysis</p>
+                                </div>
+                                <div id="chat-messages-${analysis.id}" class="mini-chat-messages"></div>
+                                <div class="mini-chat-input">
+                                    <input type="text" id="chat-input-${analysis.id}" placeholder="Ask about the architecture, tech choices, timeline..." onkeypress="if(event.key==='Enter') app.sendAnalysisChat('${analysis.id}')">
+                                    <button onclick="app.sendAnalysisChat('${analysis.id}')" class="btn btn-primary btn-small">Send</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="decision-${analysis.id}" class="approval-tab-content">
+                            <div class="decision-panel">
+                                <h4>Make Your Decision</h4>
+                                <div class="decision-buttons">
+                                    <button class="btn btn-success" onclick="app.approve('${analysis.id}', true)">
+                                        ✅ Approve & Proceed
+                                    </button>
+                                    <button class="btn btn-warning" onclick="app.approve('${analysis.id}', 'rework')">
+                                        🔄 Request Changes
+                                    </button>
+                                    <button class="btn btn-danger" onclick="app.approve('${analysis.id}', false)">
+                                        ❌ Reject
+                                    </button>
+                                </div>
+                                <textarea 
+                                    id="feedback-${analysis.id}" 
+                                    class="modern-feedback" 
+                                    placeholder="Optional feedback or specific changes needed..."
+                                ></textarea>
+                            </div>
+                        </div>
+                    </div>
                     
                     ${analysis.rework_history && analysis.rework_history.length > 0 ? `
                         <div class="rework-history">
@@ -320,62 +419,31 @@ class AgentAIInterface {
                         </div>
                     ` : ''}
                     
-                    ${analysis.diagrams && analysis.diagrams.length > 0 ? `
-                        <div class="diagram-container">
-                            <h4>System Diagrams</h4>
-                            ${analysis.diagrams.map((diagram, index) => `
-                                <div class="diagram-viewer">
-                                    <div class="diagram-header">
-                                        <strong>Diagram ${index + 1}</strong>
-                                        <button class="btn btn-small" onclick="app.viewDiagram('${encodeURIComponent(diagram)}')">View</button>
-                                    </div>
-                                    <div class="diagram-preview-text">
-                                        <div id="diagram-render-${analysis.id}-${index}" class="diagram-visual"></div>
-                                        <details style="margin-top: 10px;">
-                                            <summary>View XML Source</summary>
-                                            <pre style="background: #f8f9fa; padding: 12px; border-radius: 4px; font-size: 11px; max-height: 200px; overflow-y: auto;">${diagram}</pre>
-                                        </details>
-                                        <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">Draw.io XML diagram (${diagram.length} characters)</div>
-                                    </div>
+                        ${analysis.diagrams && analysis.diagrams.length > 0 ? `
+                            <div id="diagrams-${analysis.id}" class="approval-tab-content">
+                                <div class="diagrams-section">
+                                    <h4>📊 System Diagrams</h4>
+                                    ${analysis.diagrams.map((diagram, index) => {
+                                        const diagramContent = typeof diagram === 'string' ? diagram : diagram.content;
+                                        const diagramName = typeof diagram === 'object' ? diagram.name : `Diagram ${index + 1}`;
+                                        return `
+                                        <div class="diagram-item">
+                                            <div class="diagram-header">
+                                                <strong>${diagramName}</strong>
+                                            </div>
+                                            <img src="/api/diagram-png/${analysis.id}/${index}" alt="${diagramName}" style="max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 4px; margin-top: 8px;" onerror="this.style.display='none'"/>
+                                            </div>
+                                            <div id="diagram-render-${analysis.id}-${index}" class="diagram-visual"></div>
+                                        </div>
+                                    `}).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                    
-                    ${analysis.status === 'pending' || analysis.status === 'rework' ? `
-                        <div class="approval-section">
-                            <div class="approval-buttons">
-                                <button class="btn btn-approve" onclick="app.approve('${analysis.id}', true)">
-                                    ✅ Approve
-                                </button>
-                                <button class="btn btn-reject" onclick="app.approve('${analysis.id}', false)">
-                                    ❌ Reject
-                                </button>
-                                <button class="btn btn-secondary" onclick="app.approve('${analysis.id}', 'rework')">
-                                    🔄 Rework
-                                </button>
                             </div>
-                            <textarea 
-                                id="feedback-${analysis.id}" 
-                                class="feedback-input" 
-                                placeholder="Optional feedback or requested changes..."
-                                name="feedback-${analysis.id}"
-                            ></textarea>
-                        </div>
-                    ` : ''}
+                        ` : ''}
                 </div>
             `).join('');
             
-            // Render diagrams after DOM is updated
-            setTimeout(() => {
-                analyses.forEach(analysis => {
-                    if (analysis.diagrams && analysis.diagrams.length > 0) {
-                        analysis.diagrams.forEach((diagram, index) => {
-                            this.renderDiagramVisual(encodeURIComponent(diagram), `diagram-render-${analysis.id}-${index}`);
-                        });
-                    }
-                });
-            }, 100);
+            container.innerHTML = this.sanitizeHtml(analysesHtml);
+
         } catch (error) {
             console.error('Failed to load analyses:', error);
         }
@@ -401,10 +469,62 @@ class AgentAIInterface {
         const container = document.getElementById('features-list');
         container.innerHTML = this.features.map((feature, index) => `
             <div class="feature-item">
-                <span>${feature}</span>
+                <span>${this.escapeHtml(feature)}</span>
                 <button onclick="app.removeFeature(${index})">Remove</button>
             </div>
         `).join('');
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    sanitizeHtml(html) {
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        
+        // Remove script tags and event handlers
+        const scripts = div.querySelectorAll('script');
+        scripts.forEach(script => script.remove());
+        
+        const elements = div.querySelectorAll('*');
+        elements.forEach(el => {
+            // Remove event handler attributes
+            Array.from(el.attributes).forEach(attr => {
+                if (attr.name.startsWith('on')) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+        
+        return div.innerHTML;
+    }
+
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.style.cssText = `
+            position: fixed; top: 20px; right: 20px; z-index: 10000;
+            padding: 12px 20px; border-radius: 6px; color: white;
+            font-weight: 500; max-width: 400px; word-wrap: break-word;
+            background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => notification.remove(), 300);
+        }, 4000);
+    }
+
+    showConfirm(message) {
+        return confirm(message); // Temporary - should be replaced with custom modal
     }
 
     async handleProjectSubmit(e) {
@@ -412,21 +532,43 @@ class AgentAIInterface {
         
         const projectData = {
             project_name: document.getElementById('project-name').value,
-            description: document.getElementById('description').value,
-            target_users: document.getElementById('target-users').value,
-            scale: document.getElementById('scale').value,
+            description: document.getElementById('description')?.value || '',
+            target_users: document.getElementById('target-users')?.value || '',
+            scale: document.getElementById('scale')?.value || '',
             features: this.features,
-            constraints: document.getElementById('constraints').value
+            constraints: document.getElementById('constraints')?.value || '',
+            user_story_keys: this.selectedStories || []
         };
 
-        if (!projectData.project_name || !projectData.description || !projectData.target_users || !projectData.scale) {
-            alert('Please fill in all required fields marked with *');
+        const source = this.requirementSource;
+        
+        if (!projectData.project_name) {
+            this.showNotification('Please enter a project name', 'warning');
             return;
         }
-
-        if (this.features.length === 0) {
-            alert('Please add at least one key feature');
-            return;
+        
+        if (source === 'jira') {
+            if (this.selectedStories.length === 0) {
+                this.showNotification('Please select at least one JIRA user story', 'warning');
+                return;
+            }
+            // Override with JIRA-specific data - ignore manual fields completely
+            projectData.user_story_keys = this.selectedStories;
+            projectData.description = `Project based on ${this.selectedStories.length} JIRA user stories`;
+            projectData.target_users = 'business-users';
+            projectData.scale = this.selectedStories.length <= 3 ? 'small' : this.selectedStories.length <= 10 ? 'medium' : 'large';
+            projectData.features = []; // Will be populated from JIRA stories on backend
+            projectData.constraints = '';
+        } else {
+            // Manual mode validation
+            if (!projectData.target_users || !projectData.scale) {
+                this.showNotification('Please fill in all required fields', 'warning');
+                return;
+            }
+            if (!projectData.description || this.features.length === 0) {
+                this.showNotification('Please add description and at least one feature for manual mode', 'warning');
+                return;
+            }
         }
 
         try {
@@ -449,16 +591,16 @@ class AgentAIInterface {
                 
                 // Show success message
                 setTimeout(() => {
-                    alert('Requirements submitted! AI analysis will begin shortly.');
+                    this.showNotification('Requirements submitted! AI analysis will begin shortly.', 'success');
                 }, 500);
             } else {
-                alert('Failed to submit requirements');
+                this.showNotification('Failed to submit requirements', 'error');
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Analyze Requirements';
             }
         } catch (error) {
             console.error('Failed to submit requirements:', error);
-            alert('Failed to submit requirements');
+            this.showNotification('Failed to submit requirements', 'error');
             const submitBtn = e.target.querySelector('button[type="submit"]');
             submitBtn.disabled = false;
             submitBtn.textContent = 'Analyze Requirements';
@@ -529,19 +671,19 @@ class AgentAIInterface {
                 this.showPage('dashboard');
                 setTimeout(() => {
                     if (approved) {
-                        alert('Architecture approved! Development phase will begin shortly.');
+                        this.showNotification('Architecture approved! Development phase will begin shortly.', 'success');
                     } else if (rework) {
-                        alert('Analysis sent for rework.');
+                        this.showNotification('Analysis sent for rework.', 'info');
                     } else {
-                        alert('Analysis rejected.');
+                        this.showNotification('Analysis rejected.', 'warning');
                     }
                 }, 100);
             } else {
-                alert('Failed to submit response');
+                this.showNotification('Failed to submit response', 'error');
             }
         } catch (error) {
             console.error('Failed to submit response:', error);
-            alert('Failed to submit response');
+            this.showNotification('Failed to submit response', 'error');
         }
     }
 
@@ -556,7 +698,10 @@ class AgentAIInterface {
                     <div class="empty-state">
                         <h3>No projects yet</h3>
                         <p>Create your first project to get started</p>
-                        <button class="btn btn-primary" onclick="app.showPage('new-project')">Create Project</button>
+                        <button class="btn btn-primary" onclick="showPage('new-project')">
+                            <i data-lucide="plus"></i>
+                            Create Project
+                        </button>
                     </div>
                 `;
                 return;
@@ -721,10 +866,10 @@ class AgentAIInterface {
                 `;
                 document.body.appendChild(modal);
             } else {
-                alert('Failed to load project details');
+                this.showNotification('Failed to load project details', 'error');
             }
         } catch (error) {
-            alert(`Error loading project: ${error.message}`);
+            this.showNotification(`Error loading project: ${error.message}`, 'error');
         }
     }
 
@@ -742,7 +887,15 @@ class AgentAIInterface {
         
         // Also check diagrams field if available
         if (project.diagrams && project.diagrams.length > 0) {
-            diagrams = diagrams.concat(project.diagrams);
+            // Handle both string and object formats
+            const processedDiagrams = project.diagrams.map(diagram => {
+                if (typeof diagram === 'string') {
+                    return { content: diagram, name: 'System Diagram' };
+                } else {
+                    return diagram;
+                }
+            });
+            diagrams = diagrams.concat(processedDiagrams.map(d => d.content));
         }
         
         if (diagrams.length === 0) {
@@ -751,28 +904,31 @@ class AgentAIInterface {
         
         return `
             <div class="diagrams-container">
-                ${diagrams.map((diagram, index) => `
+                ${diagrams.map((diagram, index) => {
+                    const diagramContent = typeof diagram === 'string' ? diagram : diagram.content || diagram;
+                    const diagramName = typeof diagram === 'object' ? diagram.name : `System Diagram ${index + 1}`;
+                    return `
                     <div class="diagram-item">
                         <div class="diagram-header">
-                            <h4>System Diagram ${index + 1}</h4>
-                            <button class="btn btn-small" onclick="app.viewDiagram('${encodeURIComponent(diagram)}')">View Full Size</button>
+                            <h4>${diagramName}</h4>
+                            <button class="btn btn-small" onclick="app.viewDiagram('${encodeURIComponent(diagramContent)}')">View Full Size</button>
                         </div>
                         <div class="diagram-preview">
                             <div id="diagram-render-${index}" class="diagram-visual"></div>
                             <div class="diagram-xml-display" style="margin-top: 10px;">
                                 <details>
                                     <summary>View XML Source</summary>
-                                    <pre class="xml-content">${diagram}</pre>
+                                    <pre class="xml-content">${diagramContent}</pre>
                                 </details>
                                 <div class="diagram-actions">
-                                    <button class="btn btn-small" onclick="app.copyDiagram('${encodeURIComponent(diagram)}')">Copy XML</button>
-                                    <button class="btn btn-small" onclick="app.openInDrawio('${encodeURIComponent(diagram)}')">Open in Draw.io</button>
+                                    <button class="btn btn-small" onclick="app.copyDiagram('${encodeURIComponent(diagramContent)}')">Copy XML</button>
+                                    <button class="btn btn-small" onclick="app.openInDrawio('${encodeURIComponent(diagramContent)}')">Open in Draw.io</button>
                                 </div>
                             </div>
                         </div>
-                        <script>app.renderDiagramVisual('${encodeURIComponent(diagram)}', 'diagram-render-${index}');</script>
+                        <div data-diagram="${encodeURIComponent(diagramContent)}" data-container="diagram-render-${index}" class="diagram-script"></div>
                     </div>
-                `).join('')}
+                `}).join('')}
             </div>
         `;
     }
@@ -780,7 +936,7 @@ class AgentAIInterface {
     copyDiagram(encodedDiagram) {
         const diagram = decodeURIComponent(encodedDiagram);
         navigator.clipboard.writeText(diagram).then(() => {
-            alert('Diagram XML copied to clipboard!');
+            this.showNotification('Diagram XML copied to clipboard!', 'success');
         }).catch(() => {
             // Fallback for older browsers
             const textArea = document.createElement('textarea');
@@ -789,16 +945,11 @@ class AgentAIInterface {
             textArea.select();
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            alert('Diagram XML copied to clipboard!');
+            this.showNotification('Diagram XML copied to clipboard!', 'success');
         });
     }
     
-    openInDrawio(encodedDiagram) {
-        const diagram = decodeURIComponent(encodedDiagram);
-        this.copyDiagram(encodedDiagram);
-        window.open('https://app.diagrams.net/', '_blank');
-        alert('XML copied to clipboard! In Draw.io: File → Import from → Device, then paste the XML.');
-    }
+
     
     renderDiagramVisual(encodedDiagram, containerId) {
         const diagram = decodeURIComponent(encodedDiagram);
@@ -810,85 +961,93 @@ class AgentAIInterface {
         }
         
         try {
-            // Extract component names from the XML
-            const components = [];
+            // Parse the actual diagram XML to extract components
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(diagram, 'text/xml');
             
-            // Method 1: Look for value attributes
-            const valueMatches = diagram.match(/value="([^"]+)"/g);
-            if (valueMatches) {
-                valueMatches.forEach(match => {
-                    const component = match.replace(/value="([^"]+)"/, '$1');
-                    if (component && component.trim() && !component.includes('geometry')) {
-                        components.push(component.trim());
+            // Check for parsing errors
+            const parseError = xmlDoc.querySelector('parsererror');
+            if (parseError) {
+                throw new Error('XML parsing failed');
+            }
+            
+            const cells = xmlDoc.querySelectorAll('mxCell[value]');
+            
+            if (cells.length > 0) {
+                // Render actual diagram components
+                const components = [];
+                
+                cells.forEach(cell => {
+                    const value = cell.getAttribute('value');
+                    const style = cell.getAttribute('style') || '';
+                    const geometry = cell.querySelector('mxGeometry');
+                    
+                    if (value && value.trim() && geometry) {
+                        const x = parseInt(geometry.getAttribute('x') || '0');
+                        const y = parseInt(geometry.getAttribute('y') || '0');
+                        const width = parseInt(geometry.getAttribute('width') || '120');
+                        const height = parseInt(geometry.getAttribute('height') || '60');
+                        
+                        // Extract colors from style
+                        const fillColor = this.extractStyleValue(style, 'fillColor') || '#dae8fc';
+                        const strokeColor = this.extractStyleValue(style, 'strokeColor') || '#6c8ebf';
+                        
+                        components.push({ value, x, y, width, height, fillColor, strokeColor });
                     }
                 });
-            }
-            
-            // Method 2: Look for common component patterns
-            const patterns = [
-                /Python Script/g, /Web Scraping Module/g, /Data Storage/g, /Presentation Layer/g,
-                /User Interface/g, /Business Logic/g, /API Gateway/g, /Database/g,
-                /Frontend/g, /Backend/g, /Service/g, /Component/g
-            ];
-            
-            patterns.forEach(pattern => {
-                const matches = diagram.match(pattern);
-                if (matches) {
-                    matches.forEach(match => components.push(match));
-                }
-            });
-            
-            // Remove duplicates
-            const uniqueComponents = [...new Set(components)].filter(c => c.length > 0);
-            
-            if (uniqueComponents.length === 0) {
-                container.innerHTML = `
-                    <div style="padding: 20px; text-align: center; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-                        <p>📊 Draw.io XML detected (${diagram.length} chars)</p>
-                        <p style="color: #6c757d; font-size: 14px;">No visual components found - use "Open in Draw.io" to view</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Render visual components
-            let diagramHtml = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">';
-            
-            uniqueComponents.forEach((component, index) => {
-                const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
-                const color = colors[index % colors.length];
                 
-                diagramHtml += `
-                    <div style="
-                        padding: 12px 20px;
-                        background: linear-gradient(135deg, ${color} 0%, ${color}aa 100%);
-                        color: white;
-                        border-radius: 8px;
-                        font-weight: bold;
-                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                        text-align: center;
-                        min-width: 120px;
-                        font-size: 14px;
-                    ">
-                        ${component}
-                    </div>
-                `;
-            });
-            
-            diagramHtml += '</div>';
-            diagramHtml += `<div style="margin-top: 10px; text-align: center; font-size: 12px; color: #6c757d;">Found ${uniqueComponents.length} components</div>`;
-            
-            container.innerHTML = diagramHtml;
-            
+                if (components.length > 0) {
+                    // Calculate container dimensions
+                    const maxX = Math.max(...components.map(c => c.x + c.width));
+                    const maxY = Math.max(...components.map(c => c.y + c.height));
+                    const containerWidth = Math.max(400, maxX + 50);
+                    const containerHeight = Math.max(200, maxY + 50);
+                    
+                    // Create SVG representation
+                    let svgContent = `<svg width="${containerWidth}" height="${containerHeight}" viewBox="0 0 ${containerWidth} ${containerHeight}" style="background: #fafbfc; border-radius: 8px;">`;
+                    
+                    components.forEach(comp => {
+                        svgContent += `
+                            <rect x="${comp.x}" y="${comp.y}" width="${comp.width}" height="${comp.height}" 
+                                  fill="${comp.fillColor}" stroke="${comp.strokeColor}" stroke-width="2" 
+                                  rx="8" ry="8" style="filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.1));"/>
+                            <text x="${comp.x + comp.width/2}" y="${comp.y + comp.height/2}" 
+                                  text-anchor="middle" dominant-baseline="middle" 
+                                  font-family="Arial, sans-serif" font-size="12" font-weight="600" 
+                                  fill="#1f2937">${this.escapeHtml(comp.value)}</text>`;
+                    });
+                    
+                    svgContent += '</svg>';
+                    
+                    container.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; padding: 16px; background: #fafbfc; border-radius: 8px;">
+                            ${svgContent}
+
+                        </div>
+                    `;
+                    return;
+                }
+            }
         } catch (error) {
-            console.error('Error rendering diagram:', error);
-            container.innerHTML = `
-                <div style="padding: 20px; text-align: center; background: #fff3cd; border-radius: 8px; border: 1px solid #ffeaa7;">
-                    <p>⚠️ Error parsing diagram</p>
-                    <p style="font-size: 12px; color: #856404;">Use "Open in Draw.io" to view the diagram</p>
-                </div>
-            `;
+            console.error('Failed to parse diagram XML:', error);
         }
+        
+        // Fallback to placeholder if parsing fails
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 180px; background: #f8fafc; border-radius: 8px; padding: 24px; text-align: center;">
+                <div style="width: 48px; height: 48px; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                    📊
+                </div>
+                <p style="color: #6b7280; margin: 0 0 16px 0; font-size: 14px;">Diagram Available</p>
+
+            </div>
+        `;
+    }
+    
+    extractStyleValue(style, property) {
+        const regex = new RegExp(`${property}=([^;]+)`);
+        const match = style.match(regex);
+        return match ? match[1] : null;
     }
     
     viewDiagram(encodedDiagram) {
@@ -897,8 +1056,8 @@ class AgentAIInterface {
         modal.className = 'diagram-modal';
         modal.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.8); z-index: 1000; display: flex; 
-            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.5); z-index: 1000; display: flex; 
+            align-items: center; justify-content: center; padding: 20px;
         `;
         modal.innerHTML = `
             <div style="background: white; width: 90%; height: 90%; border-radius: 8px; overflow: hidden;">
@@ -928,8 +1087,241 @@ class AgentAIInterface {
         document.getElementById(tabName).classList.add('active');
     }
 
+    switchRequirementSource(source) {
+        const jiraMode = document.getElementById('jira-mode');
+        const manualMode = document.getElementById('manual-mode');
+        const jiraModeNote = document.getElementById('jira-mode-note');
+        const manualFields = document.querySelectorAll('.manual-only');
+        const featuresSection = document.getElementById('features-section');
+        const descriptionField = document.getElementById('description');
+        const targetUsersField = document.getElementById('target-users');
+        const scaleField = document.getElementById('scale');
+        
+        if (source === 'jira') {
+            jiraMode.style.display = 'block';
+            manualMode.style.display = 'none';
+            jiraModeNote.style.display = 'block';
+            manualFields.forEach(field => field.style.display = 'none');
+            if (featuresSection) featuresSection.style.display = 'none';
+            
+            // Remove required attributes for hidden fields
+            if (descriptionField) descriptionField.removeAttribute('required');
+            if (targetUsersField) targetUsersField.removeAttribute('required');
+            if (scaleField) scaleField.removeAttribute('required');
+            
+            this.loadJiraStories();
+        } else {
+            jiraMode.style.display = 'none';
+            manualMode.style.display = 'block';
+            jiraModeNote.style.display = 'none';
+            manualFields.forEach(field => field.style.display = 'block');
+            if (featuresSection) featuresSection.style.display = 'block';
+            
+            // Restore required attributes for visible fields
+            if (descriptionField) descriptionField.setAttribute('required', '');
+            if (targetUsersField) targetUsersField.setAttribute('required', '');
+            if (scaleField) scaleField.setAttribute('required', '');
+        }
+    }
+    
+    async loadJiraStories() {
+        const loadBtn = document.getElementById('load-stories-btn');
+        const container = document.getElementById('user-stories-list');
+        
+        loadBtn.disabled = true;
+        loadBtn.textContent = 'Loading...';
+        container.innerHTML = '<p>🔄 Loading JIRA stories...</p>';
+        
+        try {
+            // Validate URL is from same origin
+            const url = new URL('/api/jira-stories', window.location.origin);
+            const response = await fetch(url.toString());
+            const data = await response.json();
+            
+            if (data.stories && data.stories.length > 0) {
+                this.allStories = data.stories;
+                this.currentPage = 1;
+                this.renderStoriesGrid(data.source, data.total);
+            } else {
+                container.innerHTML = `<div class="error-state"><p>❌ ${data.error || 'No stories found'}</p></div>`;
+            }
+        } catch (error) {
+            container.innerHTML = `<div class="error-state"><p>❌ Error: ${error.message}</p></div>`;
+        } finally {
+            loadBtn.disabled = false;
+            loadBtn.textContent = 'Refresh Stories';
+        }
+    }
+    
+    toggleStory(storyKey) {
+        const index = this.selectedStories.indexOf(storyKey);
+        if (index > -1) {
+            this.selectedStories.splice(index, 1);
+        } else {
+            this.selectedStories.push(storyKey);
+        }
+        this.updateSelectionCount();
+    }
+    
+    selectAllStories() {
+        this.selectedStories = [...this.allStories.map(story => story.key)];
+        this.renderStoriesGrid('jira-mcp', this.allStories.length);
+    }
+    
+    clearStorySelection() {
+        const checkboxes = document.querySelectorAll('#user-stories-list input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = false);
+        this.selectedStories = [];
+        this.updateSelectionCount();
+    }
+    
+    renderStoriesGrid(source, total) {
+        const container = document.getElementById('user-stories-list');
+        const filteredStories = this.getFilteredStories();
+        const totalPages = Math.ceil(filteredStories.length / this.pageSize);
+        const startIndex = (this.currentPage - 1) * this.pageSize;
+        const pageStories = filteredStories.slice(startIndex, startIndex + this.pageSize);
+        
+        container.innerHTML = `
+            <div class="stories-grid-header">
+                <h4>Select User Stories (${total} from ${source === 'jira-mcp' ? 'JIRA KW' : 'Demo'})</h4>
+                <div class="grid-controls">
+                    <input type="text" id="story-search" placeholder="Search stories..." value="${this.searchTerm}">
+                    <button onclick="app.selectAllStories()" class="btn btn-small">Select All</button>
+                    <button onclick="app.selectAllVisible()" class="btn btn-small">Select Page</button>
+                    <button onclick="app.clearStorySelection()" class="btn btn-small">Clear All</button>
+                </div>
+            </div>
+            <div class="stories-table">
+                <div class="table-header">
+                    <div class="col-select">Select</div>
+                    <div class="col-key">Key</div>
+                    <div class="col-summary">Summary</div>
+                    <div class="col-status">Status</div>
+                </div>
+                ${pageStories.map(story => `
+                    <div class="table-row">
+                        <div class="col-select">
+                            <input type="checkbox" value="${story.key}" ${this.selectedStories.includes(story.key) ? 'checked' : ''} onchange="app.toggleStory('${story.key}')">
+                        </div>
+                        <div class="col-key">${story.key}</div>
+                        <div class="col-summary" title="${story.summary}">${story.summary}</div>
+                        <div class="col-status">
+                            <span class="status-badge status-${story.status?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}">${story.status || 'Unknown'}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="pagination">
+                <div class="pagination-info">${this.selectedStories.length} selected | Page ${this.currentPage} of ${totalPages} (${filteredStories.length} stories)</div>
+                <div class="pagination-controls">
+                    <button onclick="app.goToPage(1)" ${this.currentPage === 1 ? 'disabled' : ''}>First</button>
+                    <button onclick="app.goToPage(${this.currentPage - 1})" ${this.currentPage === 1 ? 'disabled' : ''}>Prev</button>
+                    <button onclick="app.goToPage(${this.currentPage + 1})" ${this.currentPage === totalPages ? 'disabled' : ''}>Next</button>
+                    <button onclick="app.goToPage(${totalPages})" ${this.currentPage === totalPages ? 'disabled' : ''}>Last</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('story-search').addEventListener('input', (e) => {
+            this.searchTerm = e.target.value;
+            this.currentPage = 1;
+            this.renderStoriesGrid(source, total);
+        });
+    }
+    
+    getFilteredStories() {
+        if (!this.searchTerm) return this.allStories;
+        return this.allStories.filter(story => 
+            story.key.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+            story.summary.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+            (story.description && story.description.toLowerCase().includes(this.searchTerm.toLowerCase()))
+        );
+    }
+    
+    goToPage(page) {
+        const filteredStories = this.getFilteredStories();
+        const totalPages = Math.ceil(filteredStories.length / this.pageSize);
+        if (page >= 1 && page <= totalPages) {
+            this.currentPage = page;
+            this.renderStoriesGrid('jira-mcp', this.allStories.length);
+        }
+    }
+    
+    selectAllVisible() {
+        const checkboxes = document.querySelectorAll('.stories-table input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            cb.checked = true;
+            if (!this.selectedStories.includes(cb.value)) {
+                this.selectedStories.push(cb.value);
+            }
+        });
+        this.renderStoriesGrid('jira-mcp', this.allStories.length);
+    }
+    
+    updateSelectionCount() {
+        // This method is now handled in renderStoriesGrid
+    }
+    
+    showRequirementModal() {
+        const modal = document.getElementById('requirement-modal');
+        modal.style.display = 'flex';
+    }
+    
+    selectRequirementSource(source) {
+        this.requirementSource = source;
+        
+        // Update visual selection
+        document.querySelectorAll('.option-card').forEach(card => card.classList.remove('selected'));
+        
+        // Find the clicked card and select it
+        const clickedCard = event ? event.target.closest('.option-card') : 
+            document.querySelector(`[onclick*="'${source}'"]`);
+        if (clickedCard) {
+            clickedCard.classList.add('selected');
+        }
+        
+        // Enable continue button
+        const continueBtn = document.getElementById('continue-btn');
+        if (continueBtn) {
+            continueBtn.disabled = false;
+        }
+    }
+    
+    continueWithSelection() {
+        if (!this.requirementSource) {
+            return;
+        }
+        
+        // Close modal
+        document.getElementById('requirement-modal').style.display = 'none';
+        
+        // Show new project page
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        document.getElementById('new-project-page').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+        document.querySelector('[data-page="new-project"]').classList.add('active');
+        
+        // Set current page
+        this.currentPage = 'new-project';
+        
+        // Configure form based on selection
+        this.switchRequirementSource(this.requirementSource);
+        this.setFormDefaults();
+    }
+    
+    closeRequirementModal() {
+        const modal = document.getElementById('requirement-modal');
+        modal.style.display = 'none';
+    }
+    
+    closeModal() {
+        const modal = document.getElementById('requirement-modal');
+        modal.style.display = 'none';
+    }
+
     async deleteProject(projectId) {
-        if (!confirm('Are you sure you want to delete this project? This will remove all files and cannot be undone.')) {
+        if (!this.showConfirm('Are you sure you want to delete this project? This will remove all files and cannot be undone.')) {
             return;
         }
         
@@ -939,14 +1331,14 @@ class AgentAIInterface {
             });
             
             if (response.ok) {
-                alert('Project deleted successfully');
+                this.showNotification('Project deleted successfully', 'success');
                 this.loadProjects(); // Refresh the list
             } else {
                 const error = await response.json();
-                alert(`Failed to delete project: ${error.detail}`);
+                this.showNotification(`Failed to delete project: ${error.detail}`, 'error');
             }
         } catch (error) {
-            alert(`Error deleting project: ${error.message}`);
+            this.showNotification(`Error deleting project: ${error.message}`, 'error');
         }
     }
 
@@ -995,10 +1387,253 @@ class AgentAIInterface {
                 `;
                 document.body.appendChild(modal);
             } else {
-                alert('Failed to load generated code');
+                this.showNotification('Failed to load generated code', 'error');
             }
         } catch (error) {
-            alert(`Error loading code: ${error.message}`);
+            this.showNotification(`Error loading code: ${error.message}`, 'error');
+        }
+    }
+
+    async loadMetrics() {
+        console.log('Loading metrics...');
+        try {
+            const response = await fetch('/api/metrics');
+            console.log('Metrics response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const metrics = await response.json();
+            console.log('Metrics data:', JSON.stringify(metrics, null, 2));
+            
+            document.getElementById('performance-metrics').innerHTML = this.formatPerformanceMetrics(metrics.performance);
+            document.getElementById('llm-metrics').innerHTML = this.formatLLMMetrics(metrics.llm);
+            document.getElementById('workflow-metrics').innerHTML = this.formatWorkflowMetrics(metrics.workflow);
+        } catch (error) {
+            console.error('Failed to load metrics:', error);
+            document.getElementById('performance-metrics').innerHTML = `<p>Error: ${error.message}</p>`;
+            document.getElementById('llm-metrics').innerHTML = `<p>Error: ${error.message}</p>`;
+            document.getElementById('workflow-metrics').innerHTML = `<p>Error: ${error.message}</p>`;
+        }
+    }
+    
+    formatPerformanceMetrics(metrics) {
+        if (!metrics || Object.keys(metrics).length === 0) {
+            return '<p>No performance data available</p>';
+        }
+        
+        let html = '';
+        for (const [operation, data] of Object.entries(metrics)) {
+            if (operation === 'total_projects') {
+                html += `
+                    <div class="metric-item">
+                        <strong>Projects</strong><br>
+                        Count: ${data.count}<br>
+                        Files: ${data.files_generated}<br>
+                        Size: ${data.total_size_mb}MB
+                    </div>
+                `;
+            } else if (operation === 'analyses_completed') {
+                html += `
+                    <div class="metric-item">
+                        <strong>Analyses</strong><br>
+                        Count: ${data.count}<br>
+                        Success: ${(data.success_rate * 100).toFixed(1)}%
+                    </div>
+                `;
+            } else if (operation === 'code_generation') {
+                html += `
+                    <div class="metric-item">
+                        <strong>Code Generation</strong><br>
+                        Count: ${data.count}<br>
+                        Success: ${(data.success_rate * 100).toFixed(1)}%
+                    </div>
+                `;
+            }
+        }
+        return html;
+    }
+    
+    formatLLMMetrics(metrics) {
+        if (!metrics || Object.keys(metrics).length === 0) {
+            return '<p>No LLM data available</p>';
+        }
+        
+        return `
+            <div class="metric-item">
+                <strong>LLM Usage</strong><br>
+                Total Requests: ${metrics.total_requests || 0}<br>
+                Analysis Tasks: ${metrics.analysis_tasks || 0}<br>
+                Coding Tasks: ${metrics.coding_tasks || 0}
+            </div>
+        `;
+    }
+    
+    formatWorkflowMetrics(metrics) {
+        if (!metrics || Object.keys(metrics).length === 0) {
+            return '<p>No workflow data available</p>';
+        }
+        
+        return `
+            <div class="metric-item">
+                <strong>Projects</strong><br>
+                Total: ${metrics.total_projects || 0}<br>
+                Completed: ${metrics.completed_projects || 0}<br>
+                Avg Time: ${metrics.avg_completion_time || 'N/A'}
+            </div>
+        `;
+    }
+    
+    initChat() {
+        if (!this.chatInitialized) {
+            this.chatInitialized = true;
+            this.addChatMessage('assistant', 'Hello! I\'m your AI assistant. I can help you with:\n\n• Project requirements and clarifications\n• Technology stack recommendations\n• Architecture questions\n• Code review insights\n\nWhat would you like to know?');
+        }
+    }
+    
+    async sendMessage() {
+        const input = document.getElementById('chat-input');
+        const message = input.value.trim();
+        if (!message) return;
+        
+        input.value = '';
+        this.addChatMessage('user', message);
+        this.addChatMessage('assistant', 'Thinking...');
+        
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, context: this.getChatContext() })
+            });
+            
+            const data = await response.json();
+            this.updateLastMessage(data.response);
+        } catch (error) {
+            this.updateLastMessage('Sorry, I\'m having trouble connecting. Please try again.');
+        }
+    }
+    
+    addChatMessage(role, content) {
+        const container = document.getElementById('chat-messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${role}`;
+        messageDiv.innerHTML = `
+            <div class="message-content">${this.renderMarkdown(content)}</div>
+            <div class="message-time">${new Date().toLocaleTimeString()}</div>
+        `;
+        container.appendChild(messageDiv);
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    updateLastMessage(content) {
+        const messages = document.querySelectorAll('.chat-message.assistant');
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage) {
+            lastMessage.querySelector('.message-content').innerHTML = this.renderMarkdown(content);
+        }
+    }
+    
+    getChatContext() {
+        return {
+            total_projects: Object.keys(projects || {}).length,
+            current_page: this.currentPage,
+            recent_projects: Object.values(projects || {}).slice(-3).map(p => ({ name: p.project_name, status: p.status }))
+        };
+    }
+    
+    clearChat() {
+        document.getElementById('chat-messages').innerHTML = '';
+        this.chatInitialized = false;
+        this.initChat();
+    }
+    
+    switchApprovalTab(event, tabId) {
+        const analysisId = tabId.split('-').slice(1).join('-');
+        const container = event.target.closest('.modern-approval-container');
+        
+        container.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        container.querySelectorAll('.approval-tab-content').forEach(content => content.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        
+        if (tabId.startsWith('chat-')) {
+            this.initAnalysisChat(analysisId);
+        }
+    }
+    
+    initAnalysisChat(analysisId) {
+        const chatContainer = document.getElementById(`chat-messages-${analysisId}`);
+        if (!chatContainer.innerHTML) {
+            chatContainer.innerHTML = `
+                <div class="chat-message assistant">
+                    <div class="message-content">Hi! I'm the AI architect who created this analysis. Ask me anything about the technology choices, architecture decisions, or timeline estimates.</div>
+                </div>
+            `;
+        }
+    }
+    
+    async sendAnalysisChat(analysisId) {
+        const input = document.getElementById(`chat-input-${analysisId}`);
+        const message = input.value.trim();
+        if (!message) return;
+        
+        input.value = '';
+        const chatContainer = document.getElementById(`chat-messages-${analysisId}`);
+        
+        const chatHtml = `
+            <div class="chat-message user">
+                <div class="message-content">${this.escapeHtml(message)}</div>
+            </div>
+            <div class="chat-message assistant">
+                <div class="message-content">Let me think about that...</div>
+            </div>
+        `;
+        chatContainer.innerHTML += this.sanitizeHtml(chatHtml);
+        
+        try {
+            const response = await fetch('/api/analysis-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, analysisId })
+            });
+            
+            const data = await response.json();
+            const messages = chatContainer.querySelectorAll('.chat-message.assistant');
+            const lastMessage = messages[messages.length - 1];
+            lastMessage.querySelector('.message-content').innerHTML = data.response;
+        } catch (error) {
+            const messages = chatContainer.querySelectorAll('.chat-message.assistant');
+            const lastMessage = messages[messages.length - 1];
+            lastMessage.querySelector('.message-content').innerHTML = 'I can help explain the technical decisions in this analysis. What specific aspect would you like me to clarify?';
+        }
+        
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    async expandAnalysis(analysisId) {
+        const container = document.querySelector(`[data-analysis="${analysisId}"] .analysis-summary`);
+        const contentDiv = container.querySelector('.markdown-content');
+        const button = container.querySelector('.btn');
+        
+        if (container.classList.contains('expanded')) {
+            container.classList.remove('expanded');
+            // Get analysis from cache or fetch
+            const analysis = this.analysisCache?.[analysisId];
+            if (analysis) {
+                contentDiv.innerHTML = this.renderMarkdown(analysis.content.substring(0, 500) + '...');
+            }
+            button.textContent = 'Read Full Analysis';
+        } else {
+            container.classList.add('expanded');
+            // Get full analysis
+            const analysis = this.analysisCache?.[analysisId];
+            if (analysis) {
+                contentDiv.innerHTML = this.renderMarkdown(analysis.content);
+            }
+            button.textContent = 'Show Summary';
         }
     }
 }
@@ -1018,3 +1653,6 @@ function showProjectDetails(projectId) {
 
 // Initialize the app
 const app = new AgentAIInterface();
+
+// Make app globally available
+window.app = app;
