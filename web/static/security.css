@@ -1,0 +1,109 @@
+.security-dashboard {
+    padding: 20px;
+}
+
+.security-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.security-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-left: 4px solid #e5e7eb;
+}
+
+.security-card.risk-low {
+    border-left-color: #10b981;
+}
+
+.security-card.risk-medium {
+    border-left-color: #f59e0b;
+}
+
+.security-card.risk-high {
+    border-left-color: #ef4444;
+}
+
+.security-card h3 {
+    margin: 0 0 10px 0;
+    color: #1f2937;
+}
+
+.security-card .metric {
+    font-size: 24px;
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.vulnerability-list {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.vulnerability-item {
+    padding: 15px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.vulnerability-item:last-child {
+    border-bottom: none;
+}
+
+.vulnerability-info {
+    flex: 1;
+}
+
+.vulnerability-title {
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 5px;
+}
+
+.vulnerability-description {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.severity-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.severity-high {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.severity-medium {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.severity-low {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.scan-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.last-scan {
+    color: #6b7280;
+    font-size: 14px;
+    margin-bottom: 20px;
+}

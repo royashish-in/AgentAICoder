@@ -16,6 +16,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'coding-crew', '.env')
 # Add coding-crew to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'coding-crew'))
 
+# Import security framework
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'coding-crew', 'core'))
+from security import InputSanitizer, SecurityValidator
+from exceptions import ValidationError, ProjectNotFoundError, WorkflowError
+from complexity_reducer import ComplexityReducer, WorkflowManager
+
 from config import extract_tech_stack_from_analysis, extract_timeline_from_analysis, extract_diagrams_from_analysis, get_workflow_config, get_delays_config
 
 def extract_test_plan_from_analysis(analysis_content: str) -> str:
@@ -43,6 +49,16 @@ app = FastAPI(title="AgentAI - Professional Development Platform")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="../web/static"), name="static")
+
+# Include security dashboard
+from security_dashboard import router as security_router
+app.include_router(security_router, prefix="/security")
+
+# Initialize security components
+input_sanitizer = InputSanitizer()
+security_validator = SecurityValidator()
+complexity_reducer = ComplexityReducer()
+workflow_manager = WorkflowManager()
 
 class ProjectRequirements(BaseModel):
     project_name: str
@@ -581,25 +597,37 @@ async def home():
 
 @app.post("/api/projects")
 async def create_project(requirements: ProjectRequirements):
-    project_id = str(uuid.uuid4())
-    workflow_id = str(uuid.uuid4())
-    requirement_id = f"REQ-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
-    
-    # Start workflow tracking
     try:
-        from core.performance_monitor import workflow_metrics
-        workflow_metrics.start_workflow(project_id, "full_development")
-    except ImportError:
-        pass  # Performance monitoring optional
-    
-    project_data = {
-        "id": project_id,
-        "requirement_id": requirement_id,
-        "workflow_id": workflow_id,
-        "created_at": datetime.now().isoformat(),
-        "status": "analyzing",
-        **requirements.dict()
-    }
+        # Sanitize and validate inputs
+        sanitized_data = input_sanitizer.sanitize_dict(requirements.dict())
+        
+        # Validate project name
+        if not input_sanitizer.validate_project_id(sanitized_data['project_name']):
+            raise ValidationError("Invalid project name format")
+        
+        project_id = str(uuid.uuid4())
+        workflow_id = str(uuid.uuid4())
+        requirement_id = f"REQ-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        
+        # Start workflow tracking
+        try:
+            from core.performance_monitor import workflow_metrics
+            workflow_metrics.start_workflow(project_id, "full_development")
+        except ImportError:
+            pass  # Performance monitoring optional
+        
+        project_data = {
+            "id": project_id,
+            "requirement_id": requirement_id,
+            "workflow_id": workflow_id,
+            "created_at": datetime.now().isoformat(),
+            "status": "analyzing",
+            **sanitized_data
+        }
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Project creation failed: {str(e)}")
     
     # Get JIRA user stories if provided
     if requirements.user_story_keys:
@@ -1312,6 +1340,12 @@ async def metrics_dashboard():
     """Serve metrics dashboard page"""
     from fastapi.responses import FileResponse
     return FileResponse("web/static/metrics.html")
+
+@app.get("/security-dashboard")
+async def security_dashboard():
+    """Serve security dashboard page"""
+    from fastapi.responses import FileResponse
+    return FileResponse("web/templates/security_dashboard.html")
 
 @app.get("/api/projects/{project_id}/code")
 async def get_generated_code(project_id: str):

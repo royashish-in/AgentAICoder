@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Dashboard - AgentAI</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/security.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <div class="security-dashboard">
+        <header class="page-header">
+            <h1>Security Dashboard</h1>
+            <div class="scan-actions">
+                <button class="btn btn-primary" onclick="performScan()">
+                    <i data-lucide="shield-check"></i>
+                    Run Security Scan
+                </button>
+                <button class="btn btn-secondary" onclick="loadDashboard()">
+                    <i data-lucide="refresh-cw"></i>
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <div id="last-scan" class="last-scan"></div>
+
+        <div class="security-summary" id="security-summary">
+            <div class="security-card">
+                <h3>Risk Level</h3>
+                <div class="metric" id="risk-level">-</div>
+            </div>
+            <div class="security-card">
+                <h3>Vulnerabilities</h3>
+                <div class="metric" id="vulnerability-count">-</div>
+            </div>
+            <div class="security-card">
+                <h3>Code Quality</h3>
+                <div class="metric" id="code-quality">-</div>
+            </div>
+            <div class="security-card">
+                <h3>Test Coverage</h3>
+                <div class="metric" id="test-coverage">-</div>
+            </div>
+        </div>
+
+        <div class="vulnerability-list">
+            <h2>Security Issues</h2>
+            <div id="vulnerabilities-container">
+                <p>Run a security scan to see results</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function performScan() {
+            const response = await fetch('/security/api/security/scan');
+            const results = await response.json();
+            displayResults(results);
+        }
+
+        async function loadDashboard() {
+            const response = await fetch('/security/api/security/dashboard');
+            const data = await response.json();
+            displayResults(data);
+        }
+
+        function displayResults(data) {
+            // Update summary cards
+            document.getElementById('risk-level').textContent = data.summary.risk_level.toUpperCase();
+            document.getElementById('vulnerability-count').textContent = data.summary.total_vulnerabilities;
+            document.getElementById('code-quality').textContent = data.code_quality.test_coverage.overall_coverage + '%';
+            document.getElementById('test-coverage').textContent = data.code_quality.test_coverage.overall_coverage + '%';
+
+            // Update risk level styling
+            const riskCard = document.querySelector('.security-card');
+            riskCard.className = `security-card risk-${data.summary.risk_level}`;
+
+            // Update last scan time
+            document.getElementById('last-scan').textContent = `Last scan: ${new Date(data.last_updated).toLocaleString()}`;
+
+            // Display vulnerabilities
+            const container = document.getElementById('vulnerabilities-container');
+            if (data.vulnerabilities.length === 0) {
+                container.innerHTML = '<p>No security issues found</p>';
+            } else {
+                container.innerHTML = data.vulnerabilities.map(vuln => `
+                    <div class="vulnerability-item">
+                        <div class="vulnerability-info">
+                            <div class="vulnerability-title">${vuln.type}</div>
+                            <div class="vulnerability-description">${vuln.description}</div>
+                            <div class="vulnerability-file">${vuln.file}</div>
+                        </div>
+                        <span class="severity-badge severity-${vuln.severity}">${vuln.severity.toUpperCase()}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Load dashboard on page load
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+        lucide.createIcons();
+    </script>
+</body>
+</html>
