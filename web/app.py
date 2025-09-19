@@ -9,6 +9,8 @@ from typing import Optional
 import sys
 import os
 from dotenv import load_dotenv
+from dataclasses import asdict
+from loguru import logger
 
 # Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'coding-crew', '.env'))
@@ -21,6 +23,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'coding-crew', 'co
 from security import InputSanitizer, SecurityValidator
 from exceptions import ValidationError, ProjectNotFoundError, WorkflowError
 from complexity_reducer import ComplexityReducer, WorkflowManager
+from cache_manager import cache_manager
+from async_processor import async_processor, async_analyze_requirements, async_generate_code
+from local_metrics import local_metrics, Timer, timed_operation
 
 from config import extract_tech_stack_from_analysis, extract_timeline_from_analysis, extract_diagrams_from_analysis, get_workflow_config, get_delays_config
 
@@ -59,6 +64,19 @@ input_sanitizer = InputSanitizer()
 security_validator = SecurityValidator()
 complexity_reducer = ComplexityReducer()
 workflow_manager = WorkflowManager()
+
+# Initialize performance components
+@app.on_event("startup")
+async def startup_event():
+    await async_processor.start()
+    local_metrics.start_collection()
+    logger.info("AgentAI performance systems started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await async_processor.stop()
+    local_metrics.stop_collection()
+    logger.info("AgentAI performance systems stopped")
 
 class ProjectRequirements(BaseModel):
     project_name: str
@@ -145,6 +163,10 @@ async def home():
                     <a href="#" onclick="showPage('chat')" class="nav-item" data-page="chat">
                         <i data-lucide="message-circle"></i>
                         <span>AI Chat</span>
+                    </a>
+                    <a href="#" onclick="showPage('ai-insights')" class="nav-item" data-page="ai-insights">
+                        <i data-lucide="brain"></i>
+                        <span>AI Insights</span>
                     </a>
                 </nav>
             </aside>
@@ -718,6 +740,30 @@ async def generate_tests(project_id: str):
         projects[project_id]["issues_log"] = cycle_result["issues_log"]
         projects[project_id]["total_issues_fixed"] = cycle_result["total_issues_fixed"]
         
+        # Run intelligent test analysis
+        try:
+            from agents.intelligent_test_generator import IntelligentTestGenerator
+            test_generator = IntelligentTestGenerator()
+            
+            # Analyze test coverage
+            coverage_analysis = test_generator.analyze_test_coverage(
+                cycle_result["final_tests"], 
+                cycle_result["final_code"]
+            )
+            projects[project_id]["test_coverage_analysis"] = coverage_analysis
+            
+            # Generate security tests
+            security_tests = test_generator.generate_security_tests(
+                cycle_result["final_code"], 
+                tech_stack
+            )
+            projects[project_id]["security_tests"] = security_tests
+            
+        except Exception as e:
+            logger.warning(f"Intelligent test analysis failed: {e}")
+            projects[project_id]["test_coverage_analysis"] = {"coverage_percentage": 0}
+            projects[project_id]["security_tests"] = {"security_categories": []}
+        
         # Update generated code with final refined version
         projects[project_id]["generated_code"] = cycle_result["final_code"]
         
@@ -956,6 +1002,7 @@ async def get_approval_status(analysis_id: str):
     return approvals[analysis_id]
 
 @app.post("/api/trigger-analysis/{project_id}")
+@timed_operation("analysis.total_duration_ms")
 async def trigger_analysis(project_id: str):
     if project_id not in projects:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -974,6 +1021,44 @@ async def trigger_analysis(project_id: str):
         pass  # Performance monitoring optional
     
     project = projects[project_id]
+    
+    # Check cache first
+    cached_analysis = await cache_manager.get_cached_analysis(project)
+    if cached_analysis:
+        local_metrics.record_counter("cache.hits")
+        logger.info(f"Using cached analysis for project {project_id}")
+        
+        analysis_data = {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "title": f"Cached Analysis for {project['project_name']}",
+            "content": cached_analysis,
+            "timestamp": datetime.now().isoformat(),
+            "status": "pending",
+            "recommended_tech_stack": extract_tech_stack_from_analysis(cached_analysis),
+            "estimated_timeline": extract_timeline_from_analysis(cached_analysis),
+            "cached": True
+        }
+        
+        analyses[analysis_data["id"]] = analysis_data
+        data_store.save_analyses(analyses)
+        
+        # Update workflow status
+        workflow_id = project["workflow_id"]
+        if workflow_id in workflows:
+            workflows[workflow_id]["status"] = "analysis_complete"
+            workflows[workflow_id]["current_phase"] = "Human Approval"
+            workflows[workflow_id]["progress"] = 50
+            workflows[workflow_id]["updated_at"] = datetime.now().isoformat()
+            data_store.save_workflows(workflows)
+        
+        projects[project_id]["status"] = "analysis_complete"
+        projects[project_id]["analysis"] = cached_analysis
+        data_store.save_projects(projects)
+        
+        return {"analysis_id": analysis_data["id"], "status": "analysis_complete", "analysis": cached_analysis, "cached": True}
+    
+    local_metrics.record_counter("cache.misses")
     
     # Process JIRA user stories as structured requirements
     if project.get("user_stories") and project["user_stories"].get("user_stories"):
@@ -1038,6 +1123,10 @@ async def trigger_analysis(project_id: str):
                 # Add test validation feedback to analysis
                 analysis_content += f"\n\n## Test Validation Issues:\n{test_validation['justification']}\n"
                 analysis_content += f"Coverage Gaps: {test_validation['coverage_gaps']}\n"
+        
+        # Cache the analysis result
+        await cache_manager.cache_analysis(project, analysis_content)
+        local_metrics.record_counter("analyses.completed")
         
         # Extract tech stack and diagrams from analysis
         tech_stack = extract_tech_stack_from_analysis(analysis_content)
@@ -1220,6 +1309,24 @@ async def complete_code_generation(project_id: str):
         projects[project_id]["generated_code"] = code_result["code"]
         projects[project_id]["files_generated"] = code_result["files_generated"]
         
+        # Run AI code quality analysis
+        try:
+            from agents.code_quality_ai import CodeQualityAI
+            code_quality_ai = CodeQualityAI()
+            quality_analysis = code_quality_ai.review_code(code_result["code"], tech_stack)
+            projects[project_id]["code_quality_analysis"] = quality_analysis
+            
+            # Run architecture analysis
+            from agents.architecture_advisor import ArchitectureAdvisor
+            arch_advisor = ArchitectureAdvisor()
+            arch_analysis = arch_advisor.analyze_architecture(code_result["code"], project, tech_stack)
+            projects[project_id]["architecture_analysis"] = arch_analysis
+            
+        except Exception as e:
+            logger.warning(f"AI analysis failed: {e}")
+            projects[project_id]["code_quality_analysis"] = {"quality_score": 0, "issues_found": []}
+            projects[project_id]["architecture_analysis"] = {"architecture_score": 0, "recommendations": []}
+        
         # Get and store tech stack
         tech_stack = project.get('recommended_tech_stack', [])
         if not tech_stack:
@@ -1317,23 +1424,152 @@ async def complete_deployment(project_id: str):
 @app.get("/api/metrics")
 async def get_system_metrics():
     """Get comprehensive system metrics."""
-    # Always return mock data for now
+    current_metrics = local_metrics.get_current_metrics()
+    performance_summary = local_metrics.get_performance_summary()
+    cache_stats = cache_manager.get_stats()
+    async_stats = async_processor.get_stats()
+    
     return {
-        "performance": {
-            "requirements_analysis": {"avg_duration_ms": 2500, "count": len(analyses), "avg_cpu_percent": 45.2},
-            "code_generation": {"avg_duration_ms": 8200, "count": len([p for p in projects.values() if p.get('generated_code')]), "avg_cpu_percent": 62.1},
-            "test_execution": {"avg_duration_ms": 1200, "count": len([p for p in projects.values() if p.get('generated_tests')]), "avg_cpu_percent": 35.8}
-        },
-        "llm": {
-            "llama3.1:8b": {"total_calls": len(analyses) * 2, "success_rate": 0.95, "total_tokens": len(analyses) * 1500},
-            "qwen2.5-coder": {"total_calls": len([p for p in projects.values() if p.get('generated_code')]), "success_rate": 0.92, "total_tokens": len([p for p in projects.values() if p.get('generated_code')]) * 2200}
-        },
-        "workflow": {
-            "total_projects": len(projects),
-            "completed_projects": len([p for p in projects.values() if p.get('status') == 'completed']),
-            "avg_completion_time": "3.2 days"
+        "system": current_metrics["system"],
+        "process": current_metrics["process"],
+        "application": current_metrics["application"],
+        "performance": performance_summary,
+        "cache": cache_stats,
+        "async_processing": async_stats,
+        "projects": {
+            "total": len(projects),
+            "completed": len([p for p in projects.values() if p.get('status') == 'completed']),
+            "active": len([p for p in projects.values() if p.get('status') not in ['completed', 'failed']])
         }
     }
+
+@app.get("/api/performance/tasks")
+async def get_async_tasks():
+    """Get all async tasks status."""
+    tasks = await async_processor.get_all_tasks()
+    return {
+        "tasks": [asdict(task) for task in tasks.values()],
+        "stats": async_processor.get_stats()
+    }
+
+@app.get("/api/performance/cache")
+async def get_cache_status():
+    """Get cache performance status."""
+    return cache_manager.get_stats()
+
+@app.get("/api/projects/{project_id}/ai-insights")
+async def get_ai_insights(project_id: str):
+    """Get AI-powered insights for a project."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project = projects[project_id]
+    
+    return {
+        "project_id": project_id,
+        "code_quality": project.get("code_quality_analysis", {}),
+        "architecture": project.get("architecture_analysis", {}),
+        "test_coverage": project.get("test_coverage_analysis", {}),
+        "security_tests": project.get("security_tests", {}),
+        "ai_insights": project.get("ai_insights", {})
+    }
+
+@app.post("/api/projects/{project_id}/analyze-code-quality")
+async def analyze_code_quality(project_id: str):
+    """Run AI code quality analysis on demand."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project = projects[project_id]
+    code_content = project.get("generated_code", "")
+    tech_stack = project.get("recommended_tech_stack", [])
+    
+    if not code_content:
+        raise HTTPException(status_code=400, detail="No code available for analysis")
+    
+    try:
+        from agents.code_quality_ai import CodeQualityAI
+        code_quality_ai = CodeQualityAI()
+        analysis = code_quality_ai.review_code(code_content, tech_stack)
+        
+        projects[project_id]["code_quality_analysis"] = analysis
+        data_store.save_projects(projects)
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Code quality analysis failed: {str(e)}")
+
+@app.post("/api/projects/{project_id}/generate-intelligent-tests")
+async def generate_intelligent_tests(project_id: str):
+    """Generate intelligent tests on demand."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project = projects[project_id]
+    code_content = project.get("generated_code", "")
+    tech_stack = project.get("recommended_tech_stack", [])
+    
+    if not code_content:
+        raise HTTPException(status_code=400, detail="No code available for test generation")
+    
+    try:
+        from agents.intelligent_test_generator import IntelligentTestGenerator
+        test_generator = IntelligentTestGenerator()
+        
+        # Generate comprehensive tests
+        test_results = test_generator.generate_comprehensive_tests(code_content, project, tech_stack)
+        
+        # Generate security tests
+        security_tests = test_generator.generate_security_tests(code_content, tech_stack)
+        
+        projects[project_id]["intelligent_tests"] = test_results
+        projects[project_id]["security_tests"] = security_tests
+        data_store.save_projects(projects)
+        
+        return {
+            "comprehensive_tests": test_results,
+            "security_tests": security_tests
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Intelligent test generation failed: {str(e)}")
+
+@app.post("/api/projects/{project_id}/architecture-review")
+async def architecture_review(project_id: str):
+    """Run architecture review on demand."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    project = projects[project_id]
+    code_content = project.get("generated_code", "")
+    tech_stack = project.get("recommended_tech_stack", [])
+    
+    if not code_content:
+        raise HTTPException(status_code=400, detail="No code available for architecture review")
+    
+    try:
+        from agents.architecture_advisor import ArchitectureAdvisor
+        arch_advisor = ArchitectureAdvisor()
+        
+        # Analyze current architecture
+        analysis = arch_advisor.analyze_architecture(code_content, project, tech_stack)
+        
+        # Get refactoring suggestions if there are issues
+        quality_analysis = project.get("code_quality_analysis", {})
+        issues = [issue["description"] for issue in quality_analysis.get("issues_found", [])]
+        
+        if issues:
+            refactoring = arch_advisor.suggest_refactoring(code_content, issues)
+            analysis["refactoring_suggestions"] = refactoring
+        
+        projects[project_id]["architecture_analysis"] = analysis
+        data_store.save_projects(projects)
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Architecture review failed: {str(e)}")
 
 @app.get("/metrics")
 async def metrics_dashboard():
@@ -1346,6 +1582,189 @@ async def security_dashboard():
     """Serve security dashboard page"""
     from fastapi.responses import FileResponse
     return FileResponse("web/templates/security_dashboard.html")
+
+@app.get("/ai-insights/{project_id}")
+async def ai_insights_dashboard(project_id: str):
+    """Serve AI insights dashboard page"""
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>AI Insights - {project_id}</title>
+        <link rel="stylesheet" href="/static/style.css">
+        <link rel="stylesheet" href="/static/ai_insights.css">
+        <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    </head>
+    <body>
+        <div class="ai-insights-dashboard">
+            <header class="page-header">
+                <h1>AI Insights Dashboard</h1>
+                <div class="ai-actions">
+                    <button class="btn-ai" onclick="runCodeQualityAnalysis()">
+                        <i data-lucide="search"></i>
+                        Analyze Code Quality
+                    </button>
+                    <button class="btn-ai" onclick="generateIntelligentTests()">
+                        <i data-lucide="shield-check"></i>
+                        Generate Smart Tests
+                    </button>
+                    <button class="btn-ai" onclick="reviewArchitecture()">
+                        <i data-lucide="layers"></i>
+                        Review Architecture
+                    </button>
+                </div>
+            </header>
+            
+            <div class="insights-summary" id="insights-summary">
+                <div class="insight-card quality">
+                    <div class="insight-title">Code Quality</div>
+                    <div class="insight-score" id="quality-score">-</div>
+                    <div class="insight-description">Overall code quality assessment</div>
+                </div>
+                <div class="insight-card architecture">
+                    <div class="insight-title">Architecture</div>
+                    <div class="insight-score" id="architecture-score">-</div>
+                    <div class="insight-description">System design quality</div>
+                </div>
+                <div class="insight-card testing">
+                    <div class="insight-title">Test Coverage</div>
+                    <div class="insight-score" id="coverage-score">-</div>
+                    <div class="insight-description">Test completeness percentage</div>
+                </div>
+                <div class="insight-card security">
+                    <div class="insight-title">Security Tests</div>
+                    <div class="insight-score" id="security-score">-</div>
+                    <div class="insight-description">Security test categories</div>
+                </div>
+            </div>
+            
+            <div class="recommendations-section">
+                <h2>AI Recommendations</h2>
+                <div id="recommendations-container">
+                    <p>Run AI analysis to get personalized recommendations</p>
+                </div>
+            </div>
+            
+            <div class="issues-grid" id="issues-grid">
+                <!-- Issues will be populated by JavaScript -->
+            </div>
+        </div>
+        
+        <script>
+            const projectId = '{project_id}';
+            
+            async function loadInsights() {{
+                try {{
+                    const response = await fetch(`/api/projects/${{projectId}}/ai-insights`);
+                    const data = await response.json();
+                    
+                    // Update scores
+                    document.getElementById('quality-score').textContent = data.ai_insights.code_quality_score || 0;
+                    document.getElementById('architecture-score').textContent = data.ai_insights.architecture_score || 0;
+                    document.getElementById('coverage-score').textContent = data.ai_insights.test_coverage || 0;
+                    document.getElementById('security-score').textContent = data.ai_insights.security_tests_count || 0;
+                    
+                    // Update recommendations
+                    displayRecommendations(data.code_quality?.recommendations || []);
+                    displayIssues(data.code_quality?.issues_found || []);
+                    
+                }} catch (error) {{
+                    console.error('Failed to load insights:', error);
+                }}
+            }}
+            
+            async function runCodeQualityAnalysis() {{
+                showLoading('Analyzing code quality...');
+                try {{
+                    await fetch(`/api/projects/${{projectId}}/analyze-code-quality`, {{ method: 'POST' }});
+                    await loadInsights();
+                }} catch (error) {{
+                    alert('Code quality analysis failed');
+                }}
+                hideLoading();
+            }}
+            
+            async function generateIntelligentTests() {{
+                showLoading('Generating intelligent tests...');
+                try {{
+                    await fetch(`/api/projects/${{projectId}}/generate-intelligent-tests`, {{ method: 'POST' }});
+                    await loadInsights();
+                }} catch (error) {{
+                    alert('Test generation failed');
+                }}
+                hideLoading();
+            }}
+            
+            async function reviewArchitecture() {{
+                showLoading('Reviewing architecture...');
+                try {{
+                    await fetch(`/api/projects/${{projectId}}/architecture-review`, {{ method: 'POST' }});
+                    await loadInsights();
+                }} catch (error) {{
+                    alert('Architecture review failed');
+                }}
+                hideLoading();
+            }}
+            
+            function displayRecommendations(recommendations) {{
+                const container = document.getElementById('recommendations-container');
+                if (recommendations.length === 0) {{
+                    container.innerHTML = '<p>No recommendations available. Run AI analysis first.</p>';
+                    return;
+                }}
+                
+                container.innerHTML = recommendations.map(rec => `
+                    <div class="recommendation-item ${{rec.priority?.toLowerCase() || 'medium'}}">
+                        <div class="recommendation-title">
+                            ${{rec.title || rec.description?.substring(0, 100) || 'Recommendation'}}
+                            <span class="priority-badge priority-${{rec.priority?.toLowerCase() || 'medium'}}">
+                                ${{rec.priority || 'Medium'}}
+                            </span>
+                        </div>
+                        <div class="recommendation-description">
+                            ${{rec.description || rec.title || 'No description available'}}
+                        </div>
+                    </div>
+                `).join('');
+            }}
+            
+            function displayIssues(issues) {{
+                const container = document.getElementById('issues-grid');
+                if (issues.length === 0) return;
+                
+                container.innerHTML = `
+                    <div class="issue-category">
+                        <h3>Code Quality Issues</h3>
+                        <ul class="issue-list">
+                            ${{issues.map(issue => `
+                                <li class="issue-item">
+                                    <span class="issue-text">${{issue.description}}</span>
+                                    <span class="severity-badge severity-${{issue.severity?.toLowerCase() || 'medium'}}">
+                                        ${{issue.severity || 'Medium'}}
+                                    </span>
+                                </li>
+                            `).join('')}}
+                        </ul>
+                    </div>
+                `;
+            }}
+            
+            function showLoading(message) {{
+                // Simple loading implementation
+                document.body.style.cursor = 'wait';
+            }}
+            
+            function hideLoading() {{
+                document.body.style.cursor = 'default';
+            }}
+            
+            // Load insights on page load
+            document.addEventListener('DOMContentLoaded', loadInsights);
+            lucide.createIcons();
+        </script>
+    </body>
+    </html>
+    """
 
 @app.get("/api/projects/{project_id}/code")
 async def get_generated_code(project_id: str):
@@ -1378,10 +1797,20 @@ async def get_generated_code(project_id: str):
         "test_iterations": project.get("test_iterations", 0),
         "total_issues_fixed": project.get("total_issues_fixed", 0),
         "issues_log": project.get("issues_log", []),
+        "code_quality_analysis": project.get("code_quality_analysis", {}),
+        "architecture_analysis": project.get("architecture_analysis", {}),
+        "test_coverage_analysis": project.get("test_coverage_analysis", {}),
+        "security_tests": project.get("security_tests", {}),
         "deployment_validation": project.get("deployment_validation", {}),
         "deployment_ready": project.get("deployment_ready", False),
         "git_ready": project.get("git_ready", False),
-        "status": project.get("status", "unknown")
+        "status": project.get("status", "unknown"),
+        "ai_insights": {
+            "code_quality_score": project.get("code_quality_analysis", {}).get("quality_score", 0),
+            "architecture_score": project.get("architecture_analysis", {}).get("architecture_score", 0),
+            "test_coverage": project.get("test_coverage_analysis", {}).get("coverage_percentage", 0),
+            "security_tests_count": len(project.get("security_tests", {}).get("security_categories", []))
+        }
     }
 
 @app.get("/api/jira-stories")
