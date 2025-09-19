@@ -65,6 +65,36 @@ security_validator = SecurityValidator()
 complexity_reducer = ComplexityReducer()
 workflow_manager = WorkflowManager()
 
+# Initialize Phase 3B and Phase 4 components
+from debugging_assistant import DebuggingAssistant
+from smart_refactoring import SmartRefactoring
+from intelligent_documentation import IntelligentDocumentation
+from project_manager import ProjectManager
+from security_framework import SecurityFramework
+from collaboration import CollaborationManager
+
+debugging_assistant = DebuggingAssistant()
+smart_refactoring = SmartRefactoring()
+intelligent_docs = IntelligentDocumentation()
+project_manager = ProjectManager()
+security_framework = SecurityFramework()
+collaboration_manager = CollaborationManager()
+
+# Initialize Phase 3B and Phase 4 components
+from debugging_assistant import DebuggingAssistant
+from smart_refactoring import SmartRefactoring
+from intelligent_documentation import IntelligentDocumentation
+from project_manager import ProjectManager
+from security_framework import SecurityFramework
+from collaboration import CollaborationManager
+
+debugging_assistant = DebuggingAssistant()
+smart_refactoring = SmartRefactoring()
+intelligent_docs = IntelligentDocumentation()
+project_manager = ProjectManager()
+security_framework = SecurityFramework()
+collaboration_manager = CollaborationManager()
+
 # Initialize performance components
 @app.on_event("startup")
 async def startup_event():
@@ -2120,6 +2150,125 @@ async def delete_project(project_id: str):
     data_store.save_approvals(approvals)
     
     return {"status": "deleted", "project_id": project_id}
+
+# Phase 3B Advanced AI Features Endpoints
+
+@app.post("/api/projects/{project_id}/debug-analysis")
+async def debug_analysis(project_id: str, request: dict):
+    """Run AI debugging analysis on project errors."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    error_log = request.get("error_log", "")
+    if not error_log:
+        raise HTTPException(status_code=400, detail="Error log required")
+    
+    try:
+        project = projects[project_id]
+        project_path = project.get("project_path", "")
+        
+        analysis = debugging_assistant.debug_workflow(project_path, error_log)
+        
+        projects[project_id]["debugging_analysis"] = analysis
+        data_store.save_projects(projects)
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug analysis failed: {str(e)}")
+
+@app.post("/api/projects/{project_id}/refactor-analysis")
+async def refactor_analysis(project_id: str):
+    """Run smart refactoring analysis on project code."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        project = projects[project_id]
+        project_path = project.get("project_path", "")
+        
+        if not project_path:
+            raise HTTPException(status_code=400, detail="No project path available")
+        
+        analysis = smart_refactoring.refactoring_workflow(project_path)
+        
+        projects[project_id]["refactoring_suggestions"] = analysis
+        data_store.save_projects(projects)
+        
+        return analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Refactoring analysis failed: {str(e)}")
+
+@app.post("/api/projects/{project_id}/generate-documentation")
+async def generate_project_documentation(project_id: str):
+    """Generate intelligent documentation for project."""
+    if project_id not in projects:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    try:
+        project = projects[project_id]
+        project_path = project.get("project_path", "")
+        
+        if not project_path:
+            raise HTTPException(status_code=400, detail="No project path available")
+        
+        project_info = {
+            "name": project.get("project_name", "Unknown"),
+            "description": project.get("description", ""),
+            "tech_stack": project.get("recommended_tech_stack", []),
+            "features": project.get("features", [])
+        }
+        
+        docs = intelligent_docs.documentation_workflow(project_path, project_info)
+        
+        projects[project_id]["documentation_quality"] = {
+            "readme_generated": bool(docs["readme"]),
+            "api_docs_count": len(docs["api_docs"]),
+            "commented_files_count": len(docs["commented_files"]),
+            "adrs_count": len(docs["adrs"])
+        }
+        
+        data_store.save_projects(projects)
+        
+        return docs
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Documentation generation failed: {str(e)}")
+
+# Phase 4 Enterprise Features Endpoints
+
+@app.get("/api/enterprise/projects")
+async def get_enterprise_projects():
+    """Get all projects with enterprise management features."""
+    try:
+        enterprise_projects = project_manager.list_projects()
+        return {"projects": enterprise_projects, "workspace_stats": project_manager.get_workspace_stats()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get enterprise projects: {str(e)}")
+
+@app.post("/api/security/sast-scan")
+async def run_sast_scan(request: dict):
+    """Run Static Application Security Testing scan."""
+    project_path = request.get("project_path", "")
+    
+    if not project_path:
+        raise HTTPException(status_code=400, detail="Project path required")
+    
+    try:
+        results = security_framework.sast_scan(project_path)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SAST scan failed: {str(e)}")
+
+@app.post("/api/collaboration/code-review")
+async def create_code_review(request: dict):
+    """Create new code review request."""
+    try:
+        result = collaboration_manager.create_code_review(request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create code review: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
