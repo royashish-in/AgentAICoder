@@ -1,101 +1,147 @@
-# AgentAI - AI-Powered Development Platform
+---
+title: AgentAI - AI Development Platform
+emoji: 🤖
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: 4.7.1
+app_file: app.py
+pinned: false
+license: mit
+---
 
-An intelligent development platform that uses AI agents to analyze requirements, generate code, run tests, and create documentation automatically.
+# 🤖 AgentAI - AI-Powered Development Platform
 
-## Features
+[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/yourusername/AgentAI)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **AI Requirements Analysis**: Automated analysis of project requirements with technology stack recommendations
-- **Human Approval Workflow**: Review and approve AI recommendations before development begins
-- **Automated Code Generation**: AI-powered code generation using CrewAI and Ollama
-- **Iterative Testing**: Automated test generation and issue detection with iterative fixes
-- **Documentation Generation**: Comprehensive project documentation creation
-- **Web Dashboard**: Real-time kanban board showing project progress
-- **Project Management**: Complete project lifecycle management with file organization
+An intelligent development platform powered by Hugging Face transformers that analyzes requirements, generates code, and creates full-stack applications automatically.
 
-## Architecture
+## 🚀 Try it on Hugging Face Spaces
 
-- **Frontend**: FastAPI web application with real-time dashboard
-- **Backend**: CrewAI agents powered by Ollama LLM
-- **AI Engine**: Local Ollama with Llama 3.1 8B model
-- **Storage**: JSON-based persistence with organized project folders
+**[Launch AgentAI →](https://huggingface.co/spaces/yourusername/AgentAI)**
 
-## Quick Start
+## ✨ Features
 
-### Prerequisites
+- 🤖 **AI Requirements Analysis** - Intelligent project analysis using Hugging Face models
+- 🏗️ **Automated Code Generation** - Full-stack code creation with FastAPI + React
+- 🔧 **Smart Tech Stack Selection** - AI-recommended technology choices
+- 📊 **Project Management** - Track and manage AI-generated projects
+- 🚀 **Hugging Face Native** - Built specifically for Spaces deployment
 
-- Python 3.12+
-- [Ollama](https://ollama.ai/) installed and running
-- UV package manager
+## 🛠️ How It Works
 
-### Installation
+1. **Describe Your Project** - Enter project name, description, and key features
+2. **Get AI Analysis** - Receive detailed technical analysis and recommendations
+3. **Generate Code** - Get production-ready FastAPI backend and React frontend
+4. **Deploy Anywhere** - Use generated code in your preferred environment
 
-1. Clone the repository:
+## 🤗 Powered By Hugging Face
+
+- **Transformers** - State-of-the-art language models for code generation
+- **Spaces** - Seamless deployment and hosting
+- **Gradio** - Interactive web interface
+- **Community** - Open-source AI ecosystem
+
+## 🏃‍♂️ Quick Start
+
+### On Hugging Face Spaces (Recommended)
+1. Visit [AgentAI Space](https://huggingface.co/spaces/yourusername/AgentAI)
+2. Enter your project details
+3. Get instant AI analysis and code generation
+
+### Local Development
 ```bash
-git clone https://github.com/yourusername/AgentAICoder.git
-cd AgentAICoder
+git clone https://huggingface.co/spaces/yourusername/AgentAI
+cd AgentAI
+pip install -r requirements.txt
+python app.py
 ```
 
-2. Install Ollama model:
-```bash
-ollama pull llama3.1:8b
-```
+## 📋 Example Projects
 
-3. Start the platform:
-```bash
-./start.sh
-```
+### E-commerce Platform
+- **Input**: "Online store with user authentication and payment processing"
+- **Output**: Complete FastAPI backend with React frontend, including:
+  - User authentication system
+  - Product catalog management
+  - Shopping cart functionality
+  - Payment integration structure
 
-4. Open http://localhost:8000 in your browser
+### Task Management App
+- **Input**: "Team collaboration tool with real-time updates"
+- **Output**: Full-stack application with:
+  - Real-time task updates
+  - Team member management
+  - Progress tracking dashboard
+  - API endpoints for mobile apps
 
-## Usage
+## 🔧 Technology Stack
 
-1. **Create Project**: Define requirements, features, and constraints
-2. **AI Analysis**: AI analyzes and recommends technology stack
-3. **Human Review**: Approve, reject, or request rework of AI recommendations
-4. **Development**: AI generates code, tests, and documentation
-5. **Project Delivery**: Complete project with organized file structure
+### AI/ML
+- **Hugging Face Transformers** - Code generation models
+- **PyTorch** - Deep learning framework
+- **Gradio** - ML web interfaces
 
-## Project Structure
+### Generated Code Stack
+- **Backend**: Python FastAPI
+- **Frontend**: React with TypeScript
+- **Database**: PostgreSQL
+- **Containerization**: Docker
+- **Testing**: Jest, Pytest
 
-```
-AgentAICoder/
-├── web/                    # Web interface
-│   ├── app.py             # FastAPI application
-│   ├── static/            # CSS, JS assets
-│   └── data/              # JSON persistence
-├── coding-crew/           # AI agent system
-│   ├── agents/            # CrewAI agent definitions
-│   ├── utils/             # Utilities and file management
-│   └── main.py            # Backend services
-├── generated_projects/    # AI-generated project outputs
-└── start.sh              # Startup script
-```
+## 🌟 Why Hugging Face First?
 
-## Configuration
+- **🚀 Instant Deployment** - Zero-config deployment on Spaces
+- **🤖 AI-Native** - Built with and for Hugging Face ecosystem
+- **🌍 Global Access** - Available worldwide through Spaces
+- **🔄 Continuous Updates** - Automatic model and feature updates
+- **👥 Community Driven** - Open-source and collaborative
 
-- **Ollama Model**: Configure in `coding-crew/config.py`
-- **Delays**: Adjust AI processing delays in config
-- **Workflow**: Customize phases and progress tracking
+## 📊 Capabilities
 
-## Development
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Requirements Analysis | ✅ | AI-powered project analysis |
+| Code Generation | ✅ | FastAPI + React code creation |
+| Tech Stack Recommendations | ✅ | Smart technology selection |
+| Project Templates | ✅ | Reusable project structures |
+| Real-time Interface | ✅ | Interactive Gradio web UI |
+| Multi-language Support | 🔄 | Coming soon |
+| Advanced AI Models | 🔄 | GPT-4, Claude integration |
 
-The platform uses:
-- **CrewAI**: Multi-agent AI framework
-- **Ollama**: Local LLM inference
-- **FastAPI**: Modern web framework
-- **UV**: Fast Python package management
+## 🤝 Contributing
 
-## License
+We welcome contributions! This project is designed to be:
+- **Hugging Face Native** - Optimized for Spaces deployment
+- **Community Focused** - Built with and for the HF community
+- **Open Source** - MIT licensed for maximum accessibility
 
-MIT License - see LICENSE file for details
+### Development Setup
+1. Fork the repository on Hugging Face
+2. Clone your fork locally
+3. Install dependencies: `pip install -r requirements.txt`
+4. Make your changes
+5. Test locally: `python app.py`
+6. Push to your fork and create a pull request
 
-## Contributing
+## 📄 License
 
-1. Fork the repository
-2. Create feature branch
-3. Make changes
-4. Submit pull request
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Support
+## 🙏 Acknowledgments
 
-For issues and questions, please open a GitHub issue.
+- **Hugging Face Team** - For the amazing Spaces platform and transformers
+- **Gradio Team** - For the intuitive ML interface framework
+- **Open Source Community** - For the tools and libraries that make this possible
+
+## 🔗 Links
+
+- **🤗 Hugging Face Space**: [AgentAI](https://huggingface.co/spaces/yourusername/AgentAI)
+- **📚 Documentation**: [Wiki](https://github.com/yourusername/AgentAI/wiki)
+- **🐛 Issues**: [GitHub Issues](https://github.com/yourusername/AgentAI/issues)
+- **💬 Discussions**: [HF Discussions](https://huggingface.co/spaces/yourusername/AgentAI/discussions)
+
+---
+
+**Built with ❤️ for the Hugging Face community**

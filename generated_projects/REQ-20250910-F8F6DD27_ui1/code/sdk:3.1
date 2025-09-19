@@ -1,0 +1,9 @@
+WORKDIR /app
+
+COPY ./MyApi/. .
+
+RUN dotnet restore MyApi.csproj
+
+EXPOSE 80
+
+ENTRYPOINT ["dotnet", "run"]
