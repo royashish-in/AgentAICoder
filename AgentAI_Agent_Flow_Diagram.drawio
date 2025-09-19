@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram name="AgentAI Agent Flow">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1600">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Title -->
+        <mxCell id="title" value="AgentAI - AI Agent Workflow" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="400" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- User Input -->
+        <mxCell id="user" value="👤 User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="100" width="120" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- JIRA Integration -->
+        <mxCell id="jira" value="🔗 JIRA Integration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="250" y="100" width="120" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Analysis Crew -->
+        <mxCell id="analysis_crew" value="🧠 Analysis Crew" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="150" width="150" height="80" as="geometry"/>
+        </mxCell>
+        
+        <!-- Human Approval -->
+        <mxCell id="human_approval" value="✋ Human Approval" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="300" width="150" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Development Crew -->
+        <mxCell id="dev_crew" value="💻 Development Crew" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="420" width="150" height="80" as="geometry"/>
+        </mxCell>
+        
+        <!-- Test Cycle Crew -->
+        <mxCell id="test_crew" value="🧪 Test Cycle Crew" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="560" width="150" height="80" as="geometry"/>
+        </mxCell>
+        
+        <!-- Documentation Crew -->
+        <mxCell id="doc_crew" value="📚 Documentation Crew" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="720" width="150" height="80" as="geometry"/>
+        </mxCell>
+        
+        <!-- Final Output -->
+        <mxCell id="output" value="🎯 Complete Project" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;shadow=1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="860" width="150" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Flow Arrows -->
+        <mxCell id="arrow1" value="Select Stories" style="endArrow=classic;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;" edge="1" parent="1" source="user" target="jira">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="170" y="130" as="sourcePoint"/>
+            <mxPoint x="250" y="130" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow2" value="Requirements" style="endArrow=classic;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;" edge="1" parent="1" source="jira" target="analysis_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="370" y="130" as="sourcePoint"/>
+            <mxPoint x="450" y="190" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow3" value="Analysis Report" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="analysis_crew" target="human_approval">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="525" y="230" as="sourcePoint"/>
+            <mxPoint x="525" y="300" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow4" value="Approved" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="human_approval" target="dev_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="525" y="360" as="sourcePoint"/>
+            <mxPoint x="525" y="420" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow5" value="Code Generated" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="dev_crew" target="test_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="525" y="500" as="sourcePoint"/>
+            <mxPoint x="525" y="560" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow6" value="Tests Pass" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="test_crew" target="doc_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="525" y="640" as="sourcePoint"/>
+            <mxPoint x="525" y="720" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow7" value="Documentation" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="doc_crew" target="output">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="525" y="800" as="sourcePoint"/>
+            <mxPoint x="525" y="860" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Rework Arrow -->
+        <mxCell id="rework_arrow" value="Rework" style="endArrow=classic;html=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;strokeColor=#b85450;dashed=1;" edge="1" parent="1" source="human_approval" target="analysis_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="400" y="330" as="sourcePoint"/>
+            <mxPoint x="400" y="190" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="350" y="330"/>
+              <mxPoint x="350" y="190"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Iterative Loop Arrow -->
+        <mxCell id="iteration_arrow" value="Fix Issues (Max 5x)" style="endArrow=classic;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fontSize=10;strokeColor=#b85450;dashed=1;" edge="1" parent="1" source="test_crew" target="dev_crew">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="650" y="600" as="sourcePoint"/>
+            <mxPoint x="650" y="460" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="700" y="600"/>
+              <mxPoint x="700" y="460"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

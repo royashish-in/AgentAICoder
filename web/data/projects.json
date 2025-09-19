@@ -1,18 +1,59 @@
 {
-  "5d3560e7-c9d6-41aa-ad05-582faad2633e": {
-    "id": "5d3560e7-c9d6-41aa-ad05-582faad2633e",
-    "requirement_id": "REQ-20250831-F25FE41A",
-    "workflow_id": "d5b70ec8-2de4-4c5d-bee2-07afc08424b4",
-    "created_at": "2025-08-31T21:39:50.269739",
-    "status": "analyzing",
-    "project_name": "CPy",
-    "description": "Create a Python script that scrapes the titles of the top 5 articles from a given news website (e.g., a simple blog or news site) and prints them to the console",
-    "target_users": "developers",
+  "11622867-d5c5-4278-baf7-3fa545b379ef": {
+    "id": "11622867-d5c5-4278-baf7-3fa545b379ef",
+    "requirement_id": "REQ-20250912-137D02D4",
+    "workflow_id": "ae121088-2838-4118-a55f-d5771ea9a849",
+    "created_at": "2025-09-12T19:07:05.835572",
+    "status": "analysis_complete",
+    "project_name": "UI1",
+    "description": "Project based on 2 JIRA user stories",
+    "target_users": "business-users",
     "scale": "small",
     "features": [
-      "Create a Python script that scrapes the titles of the top 5 articles from a given news website (e.g., a simple blog or news site) and prints them to the console"
+      "KW-2: As a developer, I want the web application to be easily portable to AWS",
+      "KW-1: As a developer, I want the web application to be runnable locally"
     ],
-    "constraints": "local deployment",
-    "project_path": "/Users/royashish/AI/AgentAI/web/../generated_projects/REQ-20250831-F25FE41A_cpy"
+    "constraints": "",
+    "user_story_keys": [
+      "KW-2",
+      "KW-1"
+    ],
+    "user_stories": {
+      "mcp_enabled": true,
+      "user_stories": [
+        {
+          "key": "KW-2",
+          "summary": "As a developer, I want the web application to be easily portable to AWS",
+          "status": "In Progress",
+          "description": "so that it can be deployed for broader access and scalability in the future."
+        },
+        {
+          "key": "KW-1",
+          "summary": "As a developer, I want the web application to be runnable locally",
+          "status": "In Progress",
+          "description": "so that I can develop and test it efficiently without external dependencies."
+        }
+      ]
+    },
+    "project_path": "/Users/royashish/AI/AgentAI/generated_projects/REQ-20250912-137D02D4_ui1",
+    "jira_story_count": 2,
+    "enhanced_description": "Project based on 2 JIRA user stories\n\n## JIRA User Stories Analysis:\n\n### KW-2: As a developer, I want the web application to be easily portable to AWS\n**Description:** so that it can be deployed for broader access and scalability in the future.\n**Status:** In Progress\n\n### KW-1: As a developer, I want the web application to be runnable locally\n**Description:** so that I can develop and test it efficiently without external dependencies.\n**Status:** In Progress\n"
+  },
+  "f276c10d-a358-43e9-9723-b83f66d8746b": {
+    "id": "f276c10d-a358-43e9-9723-b83f66d8746b",
+    "requirement_id": "REQ-20250916-8551BBC9",
+    "workflow_id": "f550beb7-525f-489a-9dd6-b8db075062b2",
+    "created_at": "2025-09-16T15:07:52.856234",
+    "status": "analysis_complete",
+    "project_name": "<script>alert(\"XSS\")</script>",
+    "description": "test",
+    "target_users": "",
+    "scale": "",
+    "features": [
+      "test"
+    ],
+    "constraints": "test",
+    "user_story_keys": [],
+    "project_path": "/Users/royashish/AI/AgentAI/generated_projects/REQ-20250916-8551BBC9_scriptalertxssscript"
   }
 }

@@ -28,7 +28,8 @@ class AnalysisCrew:
     """CrewAI-based analysis crew for requirements processing."""
     
     def __init__(self, model_name: str = "ollama/llama3.1:8b"):
-        self.llm = Ollama(model=model_name, base_url="http://localhost:11434")
+        from core.llm_config import get_analysis_llm
+        self.llm = get_analysis_llm()
         self.crew = self._create_crew()
     
     def _create_crew(self) -> Crew:
@@ -61,23 +62,29 @@ class AnalysisCrew:
     def analyze_requirements(self, requirements: dict) -> str:
         """Analyze project requirements using CrewAI."""
         try:
-            # Create analysis task
+            # Create analysis task with story-first approach
             analysis_task = Task(
                 description=f"""
-                Analyze the following project requirements and create a comprehensive technical specification:
+                PRIMARY OBJECTIVE: Analyze requirements to fulfill this JIRA story:
+                {self._extract_primary_story_requirement(requirements)}
                 
-                Project: {requirements.get('project_name', 'Unknown')}
-                Description: {requirements.get('description', 'No description')}
-                Target Users: {requirements.get('target_users', 'Not specified')}
-                Scale: {requirements.get('scale', 'Not specified')}
-                Features: {', '.join(requirements.get('features', []))}
-                Constraints: {requirements.get('constraints', 'None specified')}
+                CONSTRAINT: All recommendations must support the story objective above.
                 
-                Provide:
+                Project Context:
+                - Project: {requirements.get('project_name', 'Unknown')}
+                - Description: {requirements.get('description', 'No description')}
+                - Target Users: {requirements.get('target_users', 'Not specified')}
+                - Scale: {requirements.get('scale', 'Not specified')}
+                - Features: {', '.join(requirements.get('features', []))}
+                - Constraints: {requirements.get('constraints', 'None specified')}
+                
+                {self._format_jira_context(requirements)}
+                
+                Provide (only if they support the story objective):
                 1. Technology stack recommendations
                 2. Architecture patterns
                 3. Development approach
-                4. Security considerations
+                4. Security considerations (only if required by story)
                 5. Deployment strategy
                 6. System architecture diagram in draw.io XML format
                 
@@ -108,16 +115,43 @@ class AnalysisCrew:
                 expected_output="Comprehensive technical analysis with recommendations"
             )
             
+            # Create test planning task (parallel to analysis)
+            test_planning_task = Task(
+                description=f"""
+                Based on JIRA story requirements, define test strategy:
+                
+                Story Requirements:
+                {self._extract_primary_story_requirement(requirements)}
+                
+                Generate:
+                1. Test scenarios that prove story acceptance criteria
+                2. Test file structure and naming conventions
+                3. Required test dependencies and setup
+                4. Success/failure criteria for each test scenario
+                5. Minimal test suite focused on story validation
+                
+                Focus on story validation, not comprehensive testing.
+                Ensure tests can demonstrate the story is fulfilled.
+                """,
+                agent=self.crew.agents[1],
+                expected_output="Test plan aligned with story requirements"
+            )
+            
             # Create review task
             review_task = Task(
                 description="""
-                Review the technical analysis and provide:
-                1. Validation of technology choices
+                Review the technical analysis and test plan, ensuring both support the JIRA story:
+                
+                PRIORITY: Validate that analysis and tests fulfill the story requirements.
+                
+                Provide:
+                1. Validation of technology choices (story-appropriate)
                 2. Identification of potential issues
                 3. Suggestions for improvements
                 4. Risk assessment
                 5. Alternative approaches if needed
                 6. Refined draw.io XML diagrams with professional aesthetics
+                7. Test plan validation and refinement
                 
                 CRITICAL XML VALIDATION: Generate high-quality draw.io XML diagrams that are:
                 - Structurally valid with proper parent-child relationships
@@ -154,8 +188,8 @@ class AnalysisCrew:
                 expected_output="Reviewed technical analysis with validated draw.io XML diagrams"
             )
             
-            # Update crew with tasks
-            self.crew.tasks = [analysis_task, review_task]
+            # Update crew with tasks (analysis + test planning + review)
+            self.crew.tasks = [analysis_task, test_planning_task, review_task]
             
             # Execute the crew
             result = self.crew.kickoff()
@@ -193,6 +227,8 @@ class AnalysisCrew:
                 Scale: {requirements.get('scale', 'Not specified')}
                 Features: {', '.join(requirements.get('features', []))}
                 Constraints: {requirements.get('constraints', 'None specified')}
+                
+                {self._format_jira_context(requirements)}
                 
                 Address the feedback specifically and provide a revised analysis that:
                 1. Incorporates the feedback requirements
@@ -297,6 +333,46 @@ class AnalysisCrew:
             valid_diagrams.append(fallback_diagram)
         
         return valid_diagrams
+    
+    def _extract_primary_story_requirement(self, requirements: dict) -> str:
+        """Extract the core story requirement without hard-coding patterns."""
+        stories = requirements.get('user_stories', {}).get('user_stories', [])
+        if not stories:
+            return f"Project Requirement: {requirements.get('description', 'No specific story requirements')}"
+        
+        # Take the first story as primary (or combine if multiple)
+        primary_story = stories[0]
+        
+        return f"""
+        Story: {primary_story.get('key', 'N/A')}
+        Requirement: {primary_story.get('summary', 'N/A')}
+        Details: {primary_story.get('description', 'N/A')}
+        
+        ACCEPTANCE CRITERIA: All technical decisions must directly enable this user story.
+        """
+    
+    def _format_jira_context(self, requirements: dict) -> str:
+        """Format JIRA user stories context for analysis."""
+        if not requirements.get('user_stories') or not requirements['user_stories'].get('user_stories'):
+            return ""
+        
+        stories = requirements['user_stories']['user_stories']
+        context = f"\n\n## JIRA User Stories Context ({len(stories)} stories):\n"
+        context += "This project is based on JIRA user stories. Each story represents a specific feature requirement:\n\n"
+        
+        for i, story in enumerate(stories, 1):
+            context += f"{i}. **{story.get('key', 'N/A')}**: {story.get('summary', 'N/A')}\n"
+            if story.get('description'):
+                context += f"   - Description: {story['description']}\n"
+            context += f"   - Status: {story.get('status', 'Unknown')}\n\n"
+        
+        context += "\n**Analysis Instructions for JIRA Projects:**\n"
+        context += "- PRIMARY: Fulfill the story requirements exactly\n"
+        context += "- Consider story dependencies and integration points\n"
+        context += "- Design architecture to support the specific story needs\n"
+        context += "- Avoid over-engineering beyond story scope\n"
+        
+        return context
     
     def _validate_drawio_xml(self, xml_content: str) -> bool:
         """Validate draw.io XML structure."""

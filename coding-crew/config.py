@@ -145,28 +145,24 @@ def get_ollama_config() -> Dict[str, str]:
     return Config.OLLAMA
 
 def extract_diagrams_from_analysis(analysis_text: str) -> List[str]:
-    """Extract draw.io XML diagrams from analysis text."""
-    import re
+    """Generate diagrams from analysis content."""
+    from core.simple_diagram_generator import SimpleDiagramGenerator
     
-    # Look for draw.io XML patterns
-    xml_patterns = [
-        r'```xml\s*(<mxfile[^>]*>.*?</mxfile>)\s*```',
-        r'```drawio\s*(<mxfile[^>]*>.*?</mxfile>)\s*```',
-        r'(<mxfile[^>]*>.*?</mxfile>)',
-    ]
-    
+    generator = SimpleDiagramGenerator()
     diagrams = []
-    for pattern in xml_patterns:
-        matches = re.findall(pattern, analysis_text, re.DOTALL | re.IGNORECASE)
-        diagrams.extend(matches)
     
-    # Clean up and validate diagrams
-    valid_diagrams = []
-    for diagram in diagrams:
-        if '<mxfile' in diagram and '</mxfile>' in diagram:
-            valid_diagrams.append(diagram.strip())
+    # Extract components and create architecture diagram
+    tech_stack = extract_tech_stack_from_analysis(analysis_text)
+    if tech_stack:
+        arch_diagram = generator.generate_system_architecture(tech_stack)
+        diagrams.append(arch_diagram)
     
-    return valid_diagrams
+    # Create workflow diagram
+    workflow_stages = ["Analysis", "Development", "Testing", "Deployment"]
+    workflow_diagram = generator.generate_workflow_diagram(workflow_stages)
+    diagrams.append(workflow_diagram)
+    
+    return diagrams
 
 def get_server_config() -> Dict[str, Any]:
     """Get server configuration."""

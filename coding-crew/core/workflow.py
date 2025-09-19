@@ -6,6 +6,9 @@ from enum import Enum
 from loguru import logger
 from pydantic import BaseModel
 import time
+import asyncio
+
+from .mcp_integration import MCPIntegration
 
 
 class WorkflowStage(Enum):
@@ -44,6 +47,7 @@ class WorkflowOrchestrator:
     
     def __init__(self):
         self.workflows: Dict[str, WorkflowState] = {}
+        self.mcp = MCPIntegration()
         
     def create_workflow(self, requirements: str) -> str:
         """Create a new workflow."""
@@ -181,3 +185,45 @@ class WorkflowOrchestrator:
             workflow.updated_at = time.time()
             
             logger.info(f"Reset workflow {workflow_id} to analysis stage")
+    
+    async def create_workflow_with_context(self, requirements: str, project_name: str = None) -> str:
+        """Create workflow with MCP context if available."""
+        workflow_id = self.create_workflow(requirements)
+        
+        if project_name and self.mcp.enabled:
+            try:
+                context = await self.mcp.get_project_context(project_name)
+                self.update_workflow(workflow_id, data={
+                    "requirements": requirements,
+                    "project_name": project_name,
+                    "mcp_context": context
+                })
+                logger.info(f"Added MCP context to workflow {workflow_id}")
+            except Exception as e:
+                logger.error(f"Failed to get MCP context: {e}")
+        
+        return workflow_id
+    
+    async def create_external_artifacts(self, workflow_id: str) -> Dict[str, Any]:
+        """Create external artifacts for workflow."""
+        workflow = self.get_workflow(workflow_id)
+        if not workflow or not self.mcp.enabled:
+            return {"created": False, "reason": "MCP not available"}
+        
+        project_data = {
+            "name": workflow.data.get("project_name", "Unknown Project"),
+            "description": workflow.data.get("requirements", "")
+        }
+        
+        try:
+            artifacts = await self.mcp.create_project_artifacts(project_data)
+            
+            # Update workflow with artifacts
+            workflow_data = workflow.data.copy()
+            workflow_data["external_artifacts"] = artifacts
+            self.update_workflow(workflow_id, data=workflow_data)
+            
+            return {"created": True, "artifacts": artifacts}
+        except Exception as e:
+            logger.error(f"Failed to create external artifacts: {e}")
+            return {"created": False, "error": str(e)}

@@ -10,9 +10,8 @@ class TestCycleCrew:
     """CrewAI-based test cycle crew for iterative testing and issue resolution."""
     
     def __init__(self):
-        from config import get_ollama_config
-        ollama_config = get_ollama_config()
-        self.llm = Ollama(model=ollama_config["model"], base_url=ollama_config["base_url"])
+        from core.llm_config import get_testing_llm
+        self.llm = get_testing_llm()
         self.max_iterations = 5
     
     def run_test_cycle(self, project_data: dict, code_content: str) -> dict:
@@ -20,18 +19,18 @@ class TestCycleCrew:
         
         # Test Agent
         test_agent = Agent(
-            role="Senior Test Engineer",
-            goal="Generate comprehensive tests and identify code issues",
-            backstory="Expert in test-driven development, bug detection, and quality assurance",
+            role="Story-Focused Test Engineer",
+            goal="Identify issues that prevent JIRA story completion and generate story validation tests",
+            backstory="Expert in validating software against user story requirements and acceptance criteria",
             llm=self.llm,
             verbose=True
         )
         
         # Code Fix Agent
         fix_agent = Agent(
-            role="Senior Developer",
-            goal="Fix identified issues and improve code quality",
-            backstory="Expert developer focused on bug fixes, code optimization, and maintainability",
+            role="Story-Focused Developer",
+            goal="Fix issues to enable JIRA story completion",
+            backstory="Expert developer focused on delivering working solutions that fulfill user stories",
             llm=self.llm,
             verbose=True
         )
@@ -48,35 +47,32 @@ class TestCycleCrew:
                 description=f"""
                 ITERATION {iteration}/{self.max_iterations}
                 
-                Analyze the current code and generate comprehensive tests:
+                PRIMARY OBJECTIVE: Identify issues that prevent this JIRA story from being fulfilled:
+                {self._extract_story_context(project_data)}
                 
-                Project: {project_data.get('project_name', 'Unknown')}
                 Current Code: {current_code[:2000]}...
                 
-                Tasks:
-                1. Generate unit tests for all functions/classes
-                2. Create integration tests
-                3. Test edge cases and error conditions
-                4. IDENTIFY SPECIFIC ISSUES in the code:
-                   - Syntax errors
-                   - Logic errors
-                   - Missing error handling
-                   - Performance issues
-                   - Security vulnerabilities
-                   - Missing functionality
+                STORY-FOCUSED ISSUE IDENTIFICATION:
+                - Does the code fulfill the story requirement?
+                - Are there missing features needed for the story?
+                - Can the story be demonstrated with this code?
+                - Are there technical issues blocking story completion?
+                
+                Secondary technical issues:
+                - Syntax errors
+                - Logic errors
+                - Missing error handling
+                - Security vulnerabilities
                 
                 Output format:
-                TESTS:
-                [test code here]
-                
                 ISSUES FOUND:
-                - Issue 1: [description]
-                - Issue 2: [description]
+                - Issue 1: [description] Story Impact: [BLOCKS_STORY/MINOR] Severity: [HIGH/MEDIUM/LOW]
+                - Issue 2: [description] Story Impact: [BLOCKS_STORY/MINOR] Severity: [HIGH/MEDIUM/LOW]
                 
-                SEVERITY: [HIGH/MEDIUM/LOW for each issue]
+                Prioritize issues that block story completion.
                 """,
                 agent=test_agent,
-                expected_output="Test suite with detailed issue analysis and severity ratings"
+                expected_output="Detailed issue analysis with severity ratings"
             )
             
             test_result = Crew(
@@ -104,23 +100,26 @@ class TestCycleCrew:
             # Code Fix Task
             fix_task = Task(
                 description=f"""
-                ITERATION {iteration}/{self.max_iterations} - CODE FIXING
+                ITERATION {iteration}/{self.max_iterations} - STORY-FOCUSED CODE FIXING
                 
-                Fix the following issues in the code:
+                PRIMARY GOAL: Fix issues to enable JIRA story completion:
+                {self._extract_story_context(project_data)}
                 
                 Current Code: {current_code[:2000]}...
                 
                 Issues to Fix:
                 {json.dumps(issues, indent=2)}
                 
-                Requirements:
-                1. Fix ALL identified issues
-                2. Maintain existing functionality
-                3. Improve code quality and robustness
-                4. Add proper error handling
-                5. Ensure code follows best practices
+                FIXING PRIORITIES:
+                1. Fix issues that block story completion (HIGHEST PRIORITY)
+                2. Fix critical technical issues
+                3. Maintain story-required functionality
+                4. Add error handling for story scenarios
+                5. Improve code quality where it supports the story
                 
-                Provide the COMPLETE FIXED CODE with all improvements.
+                VALIDATION: Ensure the fixed code can demonstrate story fulfillment.
+                
+                Provide the COMPLETE FIXED CODE with story-focused improvements.
                 """,
                 agent=fix_agent,
                 expected_output="Complete fixed code with all issues resolved"
@@ -141,19 +140,34 @@ class TestCycleCrew:
         # Final test generation
         final_test_task = Task(
             description=f"""
-            Generate final comprehensive test suite for the refined code:
+            Generate final test suite that validates JIRA story completion:
+            
+            Story Requirements:
+            {self._extract_story_context(project_data)}
             
             Final Code: {current_code[:2000]}...
             
-            Create complete test suite with:
-            1. Unit tests for all components
-            2. Integration tests
-            3. Edge case tests
-            4. Performance tests
-            5. Error handling tests
+            Create test suite that PROVES story fulfillment:
+            1. Story acceptance tests (PRIMARY)
+            2. Story scenario validation
+            3. Story constraint verification
+            4. Basic functionality tests
+            5. Error handling for story use cases
+            
+            CRITICAL: Tests must demonstrate that the story requirement is met.
+            
+            IMPORTANT: Generate ONLY TEST CODE, not the application code.
+            Use appropriate testing framework for the technology stack.
+            Include test file names and structure.
+            
+            Format:
+            ```[language]
+            // test_main.[ext] or similar
+            [actual test code here]
+            ```
             """,
             agent=test_agent,
-            expected_output="Final comprehensive test suite"
+            expected_output="Final comprehensive test suite with proper test file structure"
         )
         
         final_tests = Crew(
@@ -169,6 +183,21 @@ class TestCycleCrew:
             "issues_log": issues_log,
             "total_issues_fixed": sum(len(log["issues_found"]) for log in issues_log)
         }
+    
+    def _extract_story_context(self, project_data: dict) -> str:
+        """Extract story context for test cycle focus."""
+        stories = project_data.get('user_stories', {}).get('user_stories', [])
+        if not stories:
+            return f"Project Goal: {project_data.get('description', 'No specific story requirements')}"
+        
+        primary_story = stories[0]
+        return f"""
+        Story: {primary_story.get('key', 'N/A')}
+        Requirement: {primary_story.get('summary', 'N/A')}
+        Details: {primary_story.get('description', 'N/A')}
+        
+        SUCCESS CRITERIA: Code must enable this story to be completed.
+        """
     
     def _extract_issues(self, test_result: str) -> List[Dict]:
         """Extract issues from test result."""

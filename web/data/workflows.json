@@ -1,12 +1,22 @@
 {
-  "d5b70ec8-2de4-4c5d-bee2-07afc08424b4": {
-    "id": "d5b70ec8-2de4-4c5d-bee2-07afc08424b4",
-    "project_id": "5d3560e7-c9d6-41aa-ad05-582faad2633e",
-    "project_name": "CPy",
-    "status": "analyzing",
-    "current_phase": "Requirements Analysis",
-    "progress": 10,
-    "created_at": "2025-08-31T21:39:50.269841",
-    "updated_at": "2025-08-31T21:39:50.269845"
+  "ae121088-2838-4118-a55f-d5771ea9a849": {
+    "id": "ae121088-2838-4118-a55f-d5771ea9a849",
+    "project_id": "11622867-d5c5-4278-baf7-3fa545b379ef",
+    "project_name": "UI1",
+    "status": "analysis_complete",
+    "current_phase": "Human Approval",
+    "progress": 50,
+    "created_at": "2025-09-12T19:07:06.640802",
+    "updated_at": "2025-09-12T19:11:06.633411"
+  },
+  "f550beb7-525f-489a-9dd6-b8db075062b2": {
+    "id": "f550beb7-525f-489a-9dd6-b8db075062b2",
+    "project_id": "f276c10d-a358-43e9-9723-b83f66d8746b",
+    "project_name": "<script>alert(\"XSS\")</script>",
+    "status": "analysis_complete",
+    "current_phase": "Human Approval",
+    "progress": 50,
+    "created_at": "2025-09-16T15:07:52.856469",
+    "updated_at": "2025-09-16T15:11:50.270530"
   }
 }

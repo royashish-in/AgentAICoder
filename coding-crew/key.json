@@ -1,0 +1,4 @@
+{
+  "request_type": "get_jira_issue",
+  "issue_key": "KW-3"
+}

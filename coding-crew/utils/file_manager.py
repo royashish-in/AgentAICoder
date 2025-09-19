@@ -76,10 +76,14 @@ class ProjectFileManager:
             return re.sub(r'[^\w\-_]', '_', name).lower()
         return None
     
-    def save_code_files(self, project_path: Path, code_content: str) -> List[Path]:
+    def save_code_files(self, project_path: Path, code_content: str, tech_stack: List[str] = None) -> List[Path]:
         """Extract and save individual code files from generated content."""
         code_dir = project_path / "code"
         saved_files = []
+        
+        # Ensure tech_stack is a list
+        if tech_stack is None:
+            tech_stack = []
         
         # Extract code blocks with filenames
         file_blocks = self._extract_code_blocks(code_content)
@@ -91,17 +95,22 @@ class ProjectFileManager:
                 file_path.write_text(content, encoding='utf-8')
                 saved_files.append(file_path)
         else:
-            # Save as single file if no individual files detected
-            main_file = code_dir / "main.py"
+            # Save as single file with appropriate extension based on tech stack
+            main_extension = self._get_main_extension(tech_stack, code_content)
+            main_file = code_dir / f"main{main_extension}"
             main_file.write_text(code_content, encoding='utf-8')
             saved_files.append(main_file)
         
         return saved_files
     
-    def save_tests(self, project_path: Path, test_content: str) -> List[Path]:
+    def save_tests(self, project_path: Path, test_content: str, tech_stack: List[str] = None) -> List[Path]:
         """Extract and save test files from generated content."""
         tests_dir = project_path / "tests"
         saved_files = []
+        
+        # Ensure tech_stack is a list
+        if tech_stack is None:
+            tech_stack = []
         
         # Extract test files
         test_blocks = self._extract_test_blocks(test_content)
@@ -113,8 +122,9 @@ class ProjectFileManager:
                 file_path.write_text(content, encoding='utf-8')
                 saved_files.append(file_path)
         else:
-            # Save as single test file
-            test_file = tests_dir / "test_main.py"
+            # Save as single test file with appropriate extension
+            test_extension = self._get_main_extension(tech_stack, test_content)
+            test_file = tests_dir / f"test_main{test_extension}"
             test_file.write_text(test_content, encoding='utf-8')
             saved_files.append(test_file)
         
@@ -209,19 +219,37 @@ class ProjectFileManager:
         """Extract test files from generated content."""
         test_blocks = []
         
+        # Enhanced patterns for different languages and test file naming conventions
         patterns = [
-            r'```\w*\s*#?\s*(test_[^\n]+\.py)\s*\n(.*?)```',
-            r'```\w*\s*#?\s*([^\n]+_test\.py)\s*\n(.*?)```',
-            r'```\w*\s*#?\s*(conftest\.py)\s*\n(.*?)```',
-            r'File:\s*(test_[^\n]+\.py)\s*\n```\w*\n(.*?)```',
-            r'(test_[^\n]+\.py):\s*\n```\w*\n(.*?)```'
+            # Python test patterns
+            r'```python\s*#?\s*(test_[^\n]+\.py)\s*\n(.*?)```',
+            r'```python\s*#?\s*([^\n]+_test\.py)\s*\n(.*?)```',
+            r'```python\s*#?\s*(conftest\.py)\s*\n(.*?)```',
+            # JavaScript test patterns
+            r'```javascript\s*#?\s*(test_[^\n]+\.js)\s*\n(.*?)```',
+            r'```javascript\s*#?\s*([^\n]+\.test\.js)\s*\n(.*?)```',
+            r'```javascript\s*#?\s*([^\n]+\.spec\.js)\s*\n(.*?)```',
+            r'```js\s*#?\s*(test_[^\n]+\.js)\s*\n(.*?)```',
+            r'```js\s*#?\s*([^\n]+\.test\.js)\s*\n(.*?)```',
+            # TypeScript test patterns
+            r'```typescript\s*#?\s*([^\n]+\.test\.ts)\s*\n(.*?)```',
+            r'```typescript\s*#?\s*([^\n]+\.spec\.ts)\s*\n(.*?)```',
+            r'```ts\s*#?\s*([^\n]+\.test\.ts)\s*\n(.*?)```',
+            # Java test patterns
+            r'```java\s*#?\s*([^\n]+Test\.java)\s*\n(.*?)```',
+            # Generic patterns
+            r'```\w*\s*//\s*(test_[^\n]+\.[^\n]+)\s*\n(.*?)```',
+            r'```\w*\s*#\s*(test_[^\n]+\.[^\n]+)\s*\n(.*?)```',
+            r'File:\s*(test_[^\n]+\.[^\n]+)\s*\n```\w*\n(.*?)```',
+            r'(test_[^\n]+\.[^\n]+):\s*\n```\w*\n(.*?)```'
         ]
         
         for pattern in patterns:
-            matches = re.findall(pattern, content, re.DOTALL)
+            matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
             for filename, code in matches:
                 filename = filename.strip().split('/')[-1]
-                test_blocks.append((filename, code.strip()))
+                if code.strip():  # Only add if there's actual content
+                    test_blocks.append((filename, code.strip()))
         
         return test_blocks
     
@@ -229,17 +257,93 @@ class ProjectFileManager:
         """Extract documentation files from generated content."""
         doc_blocks = []
         
+        # Enhanced patterns for markdown documentation
         patterns = [
-            r'```\w*\s*#?\s*([^\n]+\.md)\s*\n(.*?)```',
+            # Markdown code blocks with filenames
+            r'```markdown\s*#\s*([^\n]+\.md)\s*\n(.*?)```',
+            r'```md\s*#\s*([^\n]+\.md)\s*\n(.*?)```',
+            r'```\s*#\s*([^\n]+\.md)\s*\n(.*?)```',
+            # File: format
             r'File:\s*([^\n]+\.md)\s*\n```\w*\n(.*?)```',
+            # Filename: format
             r'([^\n]+\.md):\s*\n```\w*\n(.*?)```',
-            r'## ([^\n]+\.md)\s*\n(.*?)(?=##|$)'
+            # Header format
+            r'##\s+([^\n]+\.md)\s*\n(.*?)(?=##|$)',
+            # Direct markdown blocks
+            r'```markdown\s*\n(# [^\n]*\n.*?)```'
         ]
         
         for pattern in patterns:
-            matches = re.findall(pattern, content, re.DOTALL)
-            for filename, doc_content in matches:
-                filename = filename.strip().split('/')[-1]
-                doc_blocks.append((filename, doc_content.strip()))
+            matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+            for match in matches:
+                if len(match) == 2:
+                    filename, doc_content = match
+                    filename = filename.strip().split('/')[-1]
+                    if not filename.endswith('.md'):
+                        # If it's just content starting with #, extract title for filename
+                        title_match = re.match(r'#\s+([^\n]+)', doc_content)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                            filename = f"{re.sub(r'[^\w\s-]', '', title).replace(' ', '_').lower()}.md"
+                        else:
+                            filename = "README.md"
+                    if doc_content.strip():
+                        doc_blocks.append((filename, doc_content.strip()))
         
         return doc_blocks
+    
+    def _get_main_extension(self, tech_stack: List[str] = None, content: str = "") -> str:
+        """Determine main file extension based on technology stack and content."""
+        if not tech_stack:
+            tech_stack = []
+        
+        # Convert to lowercase for comparison
+        stack_lower = [tech.lower() for tech in tech_stack]
+        content_lower = content.lower()
+        
+        # Check technology stack first
+        if any(tech in stack_lower for tech in ['javascript', 'node.js', 'nodejs', 'react', 'vue', 'angular']):
+            return '.js'
+        elif any(tech in stack_lower for tech in ['typescript', 'ts']):
+            return '.ts'
+        elif any(tech in stack_lower for tech in ['java', 'spring', 'maven', 'gradle']):
+            return '.java'
+        elif any(tech in stack_lower for tech in ['c#', 'csharp', '.net', 'dotnet']):
+            return '.cs'
+        elif any(tech in stack_lower for tech in ['go', 'golang']):
+            return '.go'
+        elif any(tech in stack_lower for tech in ['rust']):
+            return '.rs'
+        elif any(tech in stack_lower for tech in ['php']):
+            return '.php'
+        elif any(tech in stack_lower for tech in ['ruby']):
+            return '.rb'
+        elif any(tech in stack_lower for tech in ['swift']):
+            return '.swift'
+        elif any(tech in stack_lower for tech in ['kotlin']):
+            return '.kt'
+        elif any(tech in stack_lower for tech in ['scala']):
+            return '.scala'
+        elif any(tech in stack_lower for tech in ['html', 'css']):
+            return '.html'
+        
+        # Check content for language indicators
+        if any(indicator in content_lower for indicator in ['function(', 'const ', 'let ', 'var ', 'npm', 'package.json']):
+            return '.js'
+        elif any(indicator in content_lower for indicator in ['interface ', 'type ', ': string', ': number']):
+            return '.ts'
+        elif any(indicator in content_lower for indicator in ['public class', 'import java', 'package ']):
+            return '.java'
+        elif any(indicator in content_lower for indicator in ['using system', 'namespace ', 'public class']):
+            return '.cs'
+        elif any(indicator in content_lower for indicator in ['func main', 'package main', 'import "']):
+            return '.go'
+        elif any(indicator in content_lower for indicator in ['fn main', 'use std', 'cargo']):
+            return '.rs'
+        elif any(indicator in content_lower for indicator in ['<?php', 'function ', '$']):
+            return '.php'
+        elif any(indicator in content_lower for indicator in ['def ', 'class ', 'import ', 'from ']):
+            return '.py'
+        
+        # Default to Python if nothing else matches
+        return '.py'

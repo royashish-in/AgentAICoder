@@ -12,6 +12,9 @@ database:
   url: "sqlite:///./coding_crew.db"
   echo: false
 
+# LLM Provider Configuration
+llm_provider: "ollama"  # ollama or huggingface
+
 # Ollama Configuration
 ollama:
   host: "localhost"
@@ -24,6 +27,16 @@ ollama:
     testing: "ollama/qwen2.5-coder:1.5b-base"
     documentation: "ollama/llama3.2:latest"
     embedding: "ollama/nomic-embed-text:latest"
+
+# Hugging Face Configuration
+huggingface:
+  device: "auto"  # auto, cpu, cuda
+  models:
+    analysis: "microsoft/DialoGPT-medium"
+    coding: "bigcode/starcoder2-3b"
+    review: "meta-llama/Llama-2-7b-chat-hf"
+    testing: "bigcode/starcoder2-3b"
+    documentation: "microsoft/DialoGPT-medium"
 
 # Workflow Configuration
 workflow:
@@ -52,9 +65,26 @@ security:
   algorithm: "HS256"
   access_token_expire_minutes: 30
 
+# MCP Configuration
+mcp:
+  jira:
+    server_url: "http://localhost:3001"
+    auth:
+      type: "basic"
+      username: "${JIRA_USERNAME}"
+      password: "${JIRA_API_TOKEN}"
+    project_key: "${JIRA_PROJECT_KEY}"
+  github:
+    server_url: "http://localhost:3002"
+    auth:
+      type: "token"
+      token: "${GITHUB_TOKEN}"
+    organization: "${GITHUB_ORG}"
+
 # Feature Flags
 features:
   enable_metrics: true
   enable_health_checks: true
   enable_diagram_generation: true
   enable_human_approval: true
+  enable_mcp_integration: true
