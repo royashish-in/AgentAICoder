@@ -12,7 +12,7 @@ def deploy_to_huggingface():
     
     # Configuration
     SPACE_NAME = "AgentAI"
-    USERNAME = "yourusername"  # Replace with your HF username
+    USERNAME = "royashish"  # Your actual HF username
     
     print("🚀 Deploying AgentAI to Hugging Face Spaces...")
     
